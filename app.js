@@ -1,4 +1,5 @@
 const canvas = document.getElementById("canvas");
+const canvasContent = document.getElementById("canvas-content");
 const linesSvg = document.getElementById("relationship-lines");
 const statusText = document.getElementById("status");
 const exportOutput = document.getElementById("export-output");
@@ -16,7 +17,11 @@ const classCancelButton = document.getElementById("class-cancel");
 const addClassButton = document.getElementById("add-class");
 const addSubclassButton = document.getElementById("add-subclass");
 const openLegendButton = document.getElementById("open-legend");
+const openModelButton = document.getElementById("open-model");
 const openColorsButton = document.getElementById("open-colors");
+const zoomInButton = document.getElementById("zoom-in");
+const zoomOutButton = document.getElementById("zoom-out");
+const zoomResetButton = document.getElementById("zoom-reset");
 const relationshipButtons = document.getElementById("relationship-buttons");
 const newProjectButton = document.getElementById("new-project");
 const openProjectButton = document.getElementById("open-project");
@@ -37,6 +42,13 @@ let activeModalDrag = null;
 let modalZIndex = 5;
 let relationshipType = "one-to-many";
 let currentFileName = "";
+let zoomLevel = 1;
+
+const zoomSettings = {
+  min: 0.5,
+  max: 2,
+  step: 0.1,
+};
 
 const modalDefaults = {
   "model-modal": { x: window.innerWidth - 420, y: 90 },
@@ -89,6 +101,28 @@ const setRelationshipType = (type) => {
     .forEach((button) =>
       button.classList.toggle("is-active", button.dataset.relationshipType === type)
     );
+};
+
+const setZoomLevel = (value) => {
+  const clamped = Math.min(zoomSettings.max, Math.max(zoomSettings.min, value));
+  zoomLevel = Number(clamped.toFixed(2));
+  canvasContent.style.transform = `scale(${zoomLevel})`;
+  if (zoomResetButton) {
+    zoomResetButton.textContent = `${Math.round(zoomLevel * 100)}%`;
+  }
+  renderLines();
+};
+
+const adjustZoom = (direction) => {
+  const delta = direction * zoomSettings.step;
+  setZoomLevel(zoomLevel + delta);
+};
+
+const getCanvasPoint = (event) => {
+  const rect = canvasContent.getBoundingClientRect();
+  const x = (event.clientX - rect.left) / zoomLevel;
+  const y = (event.clientY - rect.top) / zoomLevel;
+  return { x, y };
 };
 
 const addClass = (position = { x: 120, y: 120 }, options = {}) => {
@@ -248,14 +282,10 @@ const renderLines = () => {
       return;
     }
 
-    const fromRect = fromNode.getBoundingClientRect();
-    const toRect = toNode.getBoundingClientRect();
-    const canvasRect = canvas.getBoundingClientRect();
-
-    const x1 = fromRect.left + fromRect.width / 2 - canvasRect.left;
-    const y1 = fromRect.top + fromRect.height / 2 - canvasRect.top;
-    const x2 = toRect.left + toRect.width / 2 - canvasRect.left;
-    const y2 = toRect.top + toRect.height / 2 - canvasRect.top;
+    const x1 = fromNode.offsetLeft + fromNode.offsetWidth / 2;
+    const y1 = fromNode.offsetTop + fromNode.offsetHeight / 2;
+    const x2 = toNode.offsetLeft + toNode.offsetWidth / 2;
+    const y2 = toNode.offsetTop + toNode.offsetHeight / 2;
 
     const line = document.createElementNS(
       "http://www.w3.org/2000/svg",
@@ -283,7 +313,7 @@ const renderLines = () => {
 };
 
 const render = () => {
-  canvas.querySelectorAll(".class-node").forEach((node) => node.remove());
+  canvasContent.querySelectorAll(".class-node").forEach((node) => node.remove());
 
   modelState.classes.forEach((classModel) => {
     const node = document.createElement("section");
@@ -499,10 +529,11 @@ const render = () => {
       if (event.target.closest("button") || isNoDragTarget(event)) {
         return;
       }
+      const point = getCanvasPoint(event);
       dragState = {
         id: classModel.id,
-        offsetX: event.clientX - classModel.position.x,
-        offsetY: event.clientY - classModel.position.y,
+        offsetX: point.x - classModel.position.x,
+        offsetY: point.y - classModel.position.y,
       };
       node.classList.add("is-dragging");
       node.setPointerCapture(event.pointerId);
@@ -512,9 +543,10 @@ const render = () => {
       if (!dragState || dragState.id !== classModel.id) {
         return;
       }
+      const point = getCanvasPoint(event);
       const nextPosition = {
-        x: event.clientX - dragState.offsetX,
-        y: event.clientY - dragState.offsetY,
+        x: point.x - dragState.offsetX,
+        y: point.y - dragState.offsetY,
       };
       updateClass(classModel.id, { position: nextPosition });
     });
@@ -536,7 +568,7 @@ const render = () => {
       handleSelection(classModel.id);
     });
 
-    canvas.appendChild(node);
+    canvasContent.appendChild(node);
   });
 
   renderLines();
@@ -647,11 +679,14 @@ const exportJson = () => {
     classes: modelState.classes.map((item) => ({
       id: item.id,
       name: item.name,
-    attributes: [...(item.systemAttributes || systemAttributes), ...item.attributes],
-    extends: item.extends,
-    position: item.position,
-    inheritableAttributes: item.inheritableAttributes || [],
-  })),
+      attributes: [
+        ...(item.systemAttributes || systemAttributes),
+        ...item.attributes,
+      ],
+      extends: item.extends,
+      position: item.position,
+      inheritableAttributes: item.inheritableAttributes || [],
+    })),
     relationships: modelState.relationships,
   };
 
@@ -789,6 +824,7 @@ const initialize = () => {
     }
   });
   setRelationshipType(relationshipType);
+  setZoomLevel(1);
 };
 
 addClassButton.addEventListener("click", () => {
@@ -806,6 +842,10 @@ addSubclassButton.addEventListener("click", () => {
 });
 
 openLegendButton.addEventListener("click", () => toggleModal(legendModal));
+openModelButton.addEventListener("click", () => {
+  exportOutput.value = exportJson();
+  toggleModal(modelModal);
+});
 openColorsButton.addEventListener("click", () => {
   hydrateColorForm();
   toggleModal(colorsModal);
@@ -828,6 +868,10 @@ newProjectButton.addEventListener("click", () => {
   closeModal(legendModal);
   closeModal(colorsModal);
 });
+
+zoomInButton.addEventListener("click", () => adjustZoom(1));
+zoomOutButton.addEventListener("click", () => adjustZoom(-1));
+zoomResetButton.addEventListener("click", () => setZoomLevel(1));
 
 if (openProjectInput) {
   openProjectInput.addEventListener("change", (event) => {
@@ -910,6 +954,16 @@ classForm.addEventListener("submit", (event) => {
 
 classCancelButton.addEventListener("click", () => {
   closeModal(classModal);
+});
+
+canvas.addEventListener("scroll", renderLines);
+canvas.addEventListener("wheel", (event) => {
+  if (!event.ctrlKey) {
+    return;
+  }
+  event.preventDefault();
+  const direction = event.deltaY > 0 ? -1 : 1;
+  adjustZoom(direction);
 });
 
 window.addEventListener("resize", renderLines);
