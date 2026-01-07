@@ -72,6 +72,14 @@ body {
   background: linear-gradient(180deg, #f8f9ff 0%, #eef1f8 100%);
 }
 
+.canvas--linking {
+  cursor: crosshair;
+}
+
+.canvas--linking .class-node {
+  cursor: crosshair;
+}
+
 .canvas__lines {
   position: absolute;
   inset: 0;
@@ -93,6 +101,10 @@ body {
   cursor: grab;
 }
 
+.class-node.is-dragging {
+  cursor: grabbing;
+}
+
 .class-node[data-selected="true"] {
   border-color: #5d76d3;
   box-shadow: 0 0 0 3px rgba(93, 118, 211, 0.2);
@@ -112,6 +124,7 @@ body {
   border: none;
   background: transparent;
   width: 100%;
+  cursor: text;
 }
 
 .class-node__meta {
@@ -155,6 +168,7 @@ body {
 .attribute span {
   flex: 1;
   outline: none;
+  cursor: text;
 }
 
 .attribute button {
