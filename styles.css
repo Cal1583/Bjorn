@@ -317,8 +317,15 @@ body {
 }
 
 .collapsed .attributes,
-.collapsed .add-attribute {
+.collapsed .add-attribute,
+.collapsed .system-attributes {
   display: none;
+}
+
+.system-attributes {
+  margin: 0.45rem 0 0;
+  font-size: 0.7rem;
+  color: #7a829e;
 }
 
 .modal {
@@ -343,10 +350,6 @@ body {
   left: 50%;
   transform: translate(-50%, -50%);
   width: min(420px, 90vw);
-}
-
-.modal--compact {
-  width: 260px;
 }
 
 .modal__header {

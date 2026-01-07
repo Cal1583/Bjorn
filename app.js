@@ -21,7 +21,10 @@ const relationshipButtons = document.getElementById("relationship-buttons");
 const menuButton = document.getElementById("menu-button");
 const menuDropdown = document.getElementById("menu-dropdown");
 const newProjectButton = document.getElementById("new-project");
+const openProjectButton = document.getElementById("open-project");
 const saveProjectButton = document.getElementById("save-project");
+const saveProjectAsButton = document.getElementById("save-project-as");
+const openProjectInput = document.getElementById("open-project-input");
 
 let modelState = {
   classes: [],
@@ -35,6 +38,7 @@ let nextId = 1;
 let activeModalDrag = null;
 let modalZIndex = 5;
 let relationshipType = "one-to-many";
+let currentFileName = "";
 
 const modalDefaults = {
   "model-modal": { x: window.innerWidth - 420, y: 90 },
@@ -49,7 +53,7 @@ const relationshipLabels = {
   inherits: "inherits",
 };
 
-const defaultAttributes = ["id"];
+const systemAttributes = ["id"];
 const getSchemaRelationshipColor = () =>
   getComputedStyle(document.documentElement)
     .getPropertyValue("--schema-relationship")
@@ -94,7 +98,8 @@ const addClass = (position = { x: 120, y: 120 }, options = {}) => {
   const newClass = {
     id: classId,
     name: options.name || "Untitled",
-    attributes: options.attributes || [...defaultAttributes],
+    attributes: options.attributes || [],
+    systemAttributes: options.systemAttributes || [...systemAttributes],
     position,
     collapsed: false,
     extends: options.extends || null,
@@ -367,6 +372,11 @@ const render = () => {
       attributeList.appendChild(attributeItem);
     });
 
+    const systemAttributeNote = document.createElement("p");
+    systemAttributeNote.className = "system-attributes";
+    systemAttributeNote.textContent =
+      "System attribute: id (hidden, generated automatically)";
+
     const addAttributeButton = document.createElement("button");
     addAttributeButton.className = "add-attribute";
     addAttributeButton.textContent = "Add attribute";
@@ -378,6 +388,7 @@ const render = () => {
     node.appendChild(header);
     node.appendChild(meta);
     node.appendChild(attributeList);
+    node.appendChild(systemAttributeNote);
     node.appendChild(addAttributeButton);
 
     node.addEventListener("pointerdown", (event) => {
@@ -460,21 +471,12 @@ const toggleModal = (modal) => {
   }
 };
 
-const toggleModalSize = (modal, button) => {
-  const isCompact = modal.classList.toggle("modal--compact");
-  button.textContent = isCompact ? "Grow" : "Shrink";
-};
-
 const initializeModal = (modal) => {
   const header = modal.querySelector("[data-drag-handle]");
   const closeButton = modal.querySelector('[data-modal-action="close"]');
-  const sizeButton = modal.querySelector('[data-modal-action="size"]');
 
   if (closeButton) {
     closeButton.addEventListener("click", () => closeModal(modal));
-  }
-  if (sizeButton) {
-    sizeButton.addEventListener("click", () => toggleModalSize(modal, sizeButton));
   }
   if (header) {
     header.addEventListener("pointerdown", (event) => {
@@ -541,27 +543,134 @@ const exportJson = () => {
     classes: modelState.classes.map((item) => ({
       id: item.id,
       name: item.name,
-      attributes: item.attributes,
+      attributes: [...(item.systemAttributes || systemAttributes), ...item.attributes],
       extends: item.extends,
       position: item.position,
     })),
     relationships: modelState.relationships,
   };
 
-  exportOutput.value = JSON.stringify(payload, null, 2);
-  toggleModal(modelModal);
+  return JSON.stringify(payload, null, 2);
 };
 
 const resetProject = () => {
   modelState = { classes: [], relationships: [] };
   nextId = 1;
+  currentFileName = "";
   resetSelectionMode();
   render();
 };
 
+const updateNextId = () => {
+  const maxId = modelState.classes.reduce((maxValue, item) => {
+    const match = item.id.match(/class-(\d+)/);
+    if (match) {
+      return Math.max(maxValue, Number(match[1]));
+    }
+    return maxValue;
+  }, 0);
+  nextId = maxId + 1;
+};
+
+const normalizeClass = (rawClass) => {
+  const attributes = Array.isArray(rawClass.attributes) ? rawClass.attributes : [];
+  const normalizedSystem = new Set(systemAttributes);
+  const userAttributes = [];
+  attributes.forEach((attribute) => {
+    if (typeof attribute !== "string") {
+      return;
+    }
+    if (systemAttributes.includes(attribute)) {
+      normalizedSystem.add(attribute);
+    } else {
+      userAttributes.push(attribute);
+    }
+  });
+
+  return {
+    id: rawClass.id,
+    name: rawClass.name || "Untitled",
+    attributes: userAttributes,
+    systemAttributes: Array.from(normalizedSystem),
+    position: rawClass.position || { x: 120, y: 120 },
+    collapsed: Boolean(rawClass.collapsed),
+    extends: rawClass.extends || null,
+  };
+};
+
+const importJson = (jsonText, fileName = "") => {
+  let payload;
+  try {
+    payload = JSON.parse(jsonText);
+  } catch (error) {
+    setStatus("Could not open file: invalid JSON.");
+    return;
+  }
+
+  if (!payload || !Array.isArray(payload.classes)) {
+    setStatus("Could not open file: missing class data.");
+    return;
+  }
+
+  modelState = {
+    classes: payload.classes.map(normalizeClass),
+    relationships: Array.isArray(payload.relationships)
+      ? payload.relationships
+      : [],
+  };
+  currentFileName = fileName;
+  updateNextId();
+  resetSelectionMode();
+  closeModal(modelModal);
+  closeModal(legendModal);
+  closeModal(colorsModal);
+  render();
+  setStatus(fileName ? `Opened ${fileName}.` : "Project loaded.");
+};
+
+const downloadJson = (fileName, jsonText) => {
+  const blob = new Blob([jsonText], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+};
+
+const saveProjectAs = () => {
+  const suggested = currentFileName || "classbuilder.json";
+  const fileName =
+    window.prompt("Save project as...", suggested) || "";
+  if (!fileName) {
+    return;
+  }
+  const normalized = fileName.endsWith(".json") ? fileName : `${fileName}.json`;
+  const jsonText = exportJson();
+  downloadJson(normalized, jsonText);
+  currentFileName = normalized;
+  exportOutput.value = jsonText;
+  openModal(modelModal);
+  setStatus(`Saved as ${normalized}.`);
+};
+
+const saveProject = () => {
+  if (!currentFileName) {
+    saveProjectAs();
+    return;
+  }
+  const jsonText = exportJson();
+  downloadJson(currentFileName, jsonText);
+  exportOutput.value = jsonText;
+  openModal(modelModal);
+  setStatus(`Saved ${currentFileName}.`);
+};
+
 const initialize = () => {
-  addClass({ x: 120, y: 140 }, { name: "Category", attributes: ["id", "name"] });
-  addClass({ x: 420, y: 260 }, { name: "ItemType", attributes: ["id", "label"] });
+  addClass({ x: 120, y: 140 }, { name: "Category", attributes: ["name"] });
+  addClass({ x: 420, y: 260 }, { name: "ItemType", attributes: ["label"] });
   createRelationship("class-1", "class-2", "one-to-many");
   [modelModal, legendModal, colorsModal].forEach((modal) => {
     if (modal) {
@@ -593,7 +702,20 @@ openColorsButton.addEventListener("click", () => {
   menuButton.setAttribute("aria-expanded", "false");
 });
 saveProjectButton.addEventListener("click", () => {
-  exportJson();
+  saveProject();
+  menuDropdown.hidden = true;
+  menuButton.setAttribute("aria-expanded", "false");
+});
+saveProjectAsButton.addEventListener("click", () => {
+  saveProjectAs();
+  menuDropdown.hidden = true;
+  menuButton.setAttribute("aria-expanded", "false");
+});
+openProjectButton.addEventListener("click", () => {
+  if (openProjectInput) {
+    openProjectInput.value = "";
+    openProjectInput.click();
+  }
   menuDropdown.hidden = true;
   menuButton.setAttribute("aria-expanded", "false");
 });
@@ -605,6 +727,23 @@ newProjectButton.addEventListener("click", () => {
   menuDropdown.hidden = true;
   menuButton.setAttribute("aria-expanded", "false");
 });
+
+if (openProjectInput) {
+  openProjectInput.addEventListener("change", (event) => {
+    const file = event.target.files && event.target.files[0];
+    if (!file) {
+      return;
+    }
+    const reader = new FileReader();
+    reader.addEventListener("load", () => {
+      importJson(String(reader.result), file.name);
+    });
+    reader.addEventListener("error", () => {
+      setStatus("Could not open file.");
+    });
+    reader.readAsText(file);
+  });
+}
 
 menuButton.addEventListener("click", () => {
   const isHidden = menuDropdown.hidden;
