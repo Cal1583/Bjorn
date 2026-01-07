@@ -38,6 +38,7 @@ const resetSelectionMode = () => {
   selectionMode = null;
   firstSelectionId = null;
   setStatus("");
+  canvas.classList.remove("canvas--linking");
   document
     .querySelectorAll(".class-node")
     .forEach((node) => node.removeAttribute("data-selected"));
@@ -58,14 +59,21 @@ const addClass = (position = { x: 120, y: 120 }, options = {}) => {
   return newClass;
 };
 
-const updateClass = (id, updates) => {
+const updateClass = (id, updates, options = {}) => {
   const target = modelState.classes.find((item) => item.id === id);
   if (!target) {
     return;
   }
   Object.assign(target, updates);
-  render();
+  if (!options.silent) {
+    render();
+  }
 };
+
+const isNoDragTarget = (event) =>
+  event.target.closest(
+    'input, textarea, [contenteditable="true"], [data-no-drag="true"]'
+  );
 
 const addAttribute = (id) => {
   const target = modelState.classes.find((item) => item.id === id);
@@ -188,6 +196,9 @@ const render = () => {
   modelState.classes.forEach((classModel) => {
     const node = document.createElement("section");
     node.className = `class-node${classModel.collapsed ? " collapsed" : ""}`;
+    if (dragState && dragState.id === classModel.id) {
+      node.classList.add("is-dragging");
+    }
     node.style.left = `${classModel.position.x}px`;
     node.style.top = `${classModel.position.y}px`;
     node.dataset.classId = classModel.id;
@@ -198,8 +209,15 @@ const render = () => {
     const title = document.createElement("input");
     title.value = classModel.name;
     title.className = "class-node__title";
+    title.setAttribute("data-no-drag", "true");
+    title.addEventListener("pointerdown", (event) => event.stopPropagation());
+    title.addEventListener("click", (event) => event.stopPropagation());
     title.addEventListener("input", (event) => {
-      updateClass(classModel.id, { name: event.target.value.trim() || "Untitled" });
+      updateClass(
+        classModel.id,
+        { name: event.target.value.trim() || "Untitled" },
+        { silent: true }
+      );
     });
 
     const actions = document.createElement("div");
@@ -254,11 +272,18 @@ const render = () => {
       const attributeText = document.createElement("span");
       attributeText.textContent = attribute;
       attributeText.contentEditable = true;
+      attributeText.setAttribute("data-no-drag", "true");
+      attributeText.addEventListener("pointerdown", (event) =>
+        event.stopPropagation()
+      );
+      attributeText.addEventListener("click", (event) =>
+        event.stopPropagation()
+      );
       attributeText.addEventListener("input", (event) => {
         const nextAttributes = [...classModel.attributes];
         nextAttributes[index] =
           event.target.textContent.trim() || "unnamed_attribute";
-        updateClass(classModel.id, { attributes: nextAttributes });
+        updateClass(classModel.id, { attributes: nextAttributes }, { silent: true });
       });
 
       const deleteButton = document.createElement("button");
@@ -288,7 +313,7 @@ const render = () => {
     node.appendChild(addAttributeButton);
 
     node.addEventListener("pointerdown", (event) => {
-      if (event.target.closest("button") || event.target.matches("input, span")) {
+      if (event.target.closest("button") || isNoDragTarget(event)) {
         return;
       }
       dragState = {
@@ -296,6 +321,7 @@ const render = () => {
         offsetX: event.clientX - classModel.position.x,
         offsetY: event.clientY - classModel.position.y,
       };
+      node.classList.add("is-dragging");
       node.setPointerCapture(event.pointerId);
     });
 
@@ -311,10 +337,19 @@ const render = () => {
     });
 
     node.addEventListener("pointerup", () => {
+      node.classList.remove("is-dragging");
       dragState = null;
     });
 
-    node.addEventListener("click", () => {
+    node.addEventListener("pointercancel", () => {
+      node.classList.remove("is-dragging");
+      dragState = null;
+    });
+
+    node.addEventListener("click", (event) => {
+      if (isNoDragTarget(event) || event.target.closest("button")) {
+        return;
+      }
       handleSelection(classModel.id);
     });
 
@@ -355,12 +390,14 @@ addRelationshipButton.addEventListener("click", () => {
   selectionMode = "relationship";
   firstSelectionId = null;
   setStatus("Select the first class for the relationship.");
+  canvas.classList.add("canvas--linking");
 });
 
 addSubclassButton.addEventListener("click", () => {
   selectionMode = "subclass";
   firstSelectionId = null;
   setStatus("Select the parent class, then the subclass.");
+  canvas.classList.add("canvas--linking");
 });
 
 exportJsonButton.addEventListener("click", exportJson);
