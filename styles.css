@@ -237,6 +237,10 @@ body {
   padding: 0.3rem 0.45rem;
 }
 
+.attribute[data-inherited="true"] {
+  box-shadow: inset 0 0 0 1px rgba(53, 82, 193, 0.45);
+}
+
 .attribute__marker {
   width: 10px;
   height: 10px;
@@ -244,6 +248,14 @@ body {
   background: var(--schema-attribute);
   flex-shrink: 0;
   display: none;
+}
+
+.attribute__toggle {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  accent-color: #3552c1;
+  cursor: pointer;
 }
 
 .attribute[data-attribute-type="id"] .attribute__marker {
@@ -286,8 +298,21 @@ body {
   width: 100%;
 }
 
+.add-subclass {
+  margin-top: 0.35rem;
+  border: none;
+  background: #eef1fb;
+  color: #3b4256;
+  font-weight: 600;
+  border-radius: 8px;
+  padding: 0.35rem;
+  cursor: pointer;
+  width: 100%;
+}
+
 .collapsed .attributes,
 .collapsed .add-attribute,
+.collapsed .add-subclass,
 .collapsed .system-attributes {
   display: none;
 }

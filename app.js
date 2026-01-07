@@ -98,6 +98,7 @@ const addClass = (position = { x: 120, y: 120 }, options = {}) => {
     name: options.name || "Untitled",
     attributes: options.attributes || [],
     systemAttributes: options.systemAttributes || [...systemAttributes],
+    inheritableAttributes: options.inheritableAttributes || [],
     position,
     collapsed: false,
     extends: options.extends || null,
@@ -137,8 +138,37 @@ const removeAttribute = (id, index) => {
   if (!target) {
     return;
   }
+  const removedAttribute = target.attributes[index];
   target.attributes.splice(index, 1);
+  if (removedAttribute && Array.isArray(target.inheritableAttributes)) {
+    target.inheritableAttributes = target.inheritableAttributes.filter(
+      (attribute) => attribute !== removedAttribute
+    );
+  }
   render();
+};
+
+const mergeUniqueAttributes = (attributes) =>
+  Array.from(new Set(attributes.filter(Boolean)));
+
+const getInheritedAttributes = (classModel) => {
+  const inheritable = new Set(classModel.inheritableAttributes || []);
+  return classModel.attributes.filter((attribute) => inheritable.has(attribute));
+};
+
+const createSubclass = (parentClass) => {
+  if (!parentClass) {
+    return;
+  }
+  const inheritedAttributes = getInheritedAttributes(parentClass);
+  const newClass = addClass(
+    { x: parentClass.position.x + 40, y: parentClass.position.y + 140 },
+    {
+      attributes: inheritedAttributes,
+      extends: parentClass.id,
+    }
+  );
+  createRelationship(parentClass.id, newClass.id, "inherits");
 };
 
 const createRelationship = (fromId, toId, type) => {
@@ -172,7 +202,21 @@ const handleSelection = (classId) => {
   }
 
   if (selectionMode === "subclass") {
-    updateClass(classId, { extends: firstSelectionId });
+    const parentClass = modelState.classes.find(
+      (item) => item.id === firstSelectionId
+    );
+    const childClass = modelState.classes.find((item) => item.id === classId);
+    const inheritedAttributes = parentClass
+      ? getInheritedAttributes(parentClass)
+      : [];
+    const nextAttributes = childClass
+      ? mergeUniqueAttributes([...inheritedAttributes, ...childClass.attributes])
+      : inheritedAttributes;
+    updateClass(
+      classId,
+      { extends: firstSelectionId, attributes: nextAttributes },
+      { silent: true }
+    );
     createRelationship(firstSelectionId, classId, "inherits");
   }
 
@@ -279,7 +323,11 @@ const render = () => {
     actions.className = "class-node__actions";
 
     const collapseButton = document.createElement("button");
-    collapseButton.textContent = classModel.collapsed ? "Expand" : "Collapse";
+    collapseButton.textContent = classModel.collapsed ? "+" : "−";
+    collapseButton.setAttribute(
+      "aria-label",
+      classModel.collapsed ? "Expand class" : "Collapse class"
+    );
     collapseButton.addEventListener("click", (event) => {
       event.stopPropagation();
       updateClass(classModel.id, { collapsed: !classModel.collapsed });
@@ -329,6 +377,40 @@ const render = () => {
       if (isIdAttribute(attribute)) {
         attributeItem.dataset.attributeType = "id";
       }
+      if (
+        Array.isArray(classModel.inheritableAttributes) &&
+        classModel.inheritableAttributes.includes(attribute)
+      ) {
+        attributeItem.dataset.inherited = "true";
+      }
+
+      const inheritToggle = document.createElement("input");
+      inheritToggle.type = "checkbox";
+      inheritToggle.className = "attribute__toggle";
+      inheritToggle.title = "Mark as inherited for new subclasses";
+      inheritToggle.checked = Boolean(
+        classModel.inheritableAttributes?.includes(attribute)
+      );
+      inheritToggle.setAttribute("data-no-drag", "true");
+      inheritToggle.addEventListener("pointerdown", (event) =>
+        event.stopPropagation()
+      );
+      inheritToggle.addEventListener("click", (event) => event.stopPropagation());
+      inheritToggle.addEventListener("change", (event) => {
+        const nextInheritable = new Set(classModel.inheritableAttributes || []);
+        if (event.target.checked) {
+          nextInheritable.add(attribute);
+          attributeItem.dataset.inherited = "true";
+        } else {
+          nextInheritable.delete(attribute);
+          delete attributeItem.dataset.inherited;
+        }
+        updateClass(
+          classModel.id,
+          { inheritableAttributes: Array.from(nextInheritable) },
+          { silent: true }
+        );
+      });
 
       const attributeMarker = document.createElement("span");
       attributeMarker.className = "attribute__marker";
@@ -348,12 +430,25 @@ const render = () => {
         const nextValue = event.target.textContent.trim() || "unnamed_attribute";
         const nextAttributes = [...classModel.attributes];
         nextAttributes[index] = nextValue;
+        const nextInheritable = [...(classModel.inheritableAttributes || [])];
+        const wasInheritable = nextInheritable.includes(attribute);
+        const updatedInheritable = wasInheritable
+          ? mergeUniqueAttributes(
+              nextInheritable
+                .filter((entry) => entry !== attribute)
+                .concat(nextValue)
+            )
+          : nextInheritable;
         if (isIdAttribute(nextValue)) {
           attributeItem.dataset.attributeType = "id";
         } else {
           delete attributeItem.dataset.attributeType;
         }
-        updateClass(classModel.id, { attributes: nextAttributes }, { silent: true });
+        updateClass(
+          classModel.id,
+          { attributes: nextAttributes, inheritableAttributes: updatedInheritable },
+          { silent: true }
+        );
       });
 
       const deleteButton = document.createElement("button");
@@ -365,6 +460,7 @@ const render = () => {
       });
 
       attributeItem.appendChild(attributeMarker);
+      attributeItem.appendChild(inheritToggle);
       attributeItem.appendChild(attributeText);
       attributeItem.appendChild(deleteButton);
       attributeList.appendChild(attributeItem);
@@ -383,11 +479,21 @@ const render = () => {
       addAttribute(classModel.id);
     });
 
+    const addSubclassInlineButton = document.createElement("button");
+    addSubclassInlineButton.className = "add-subclass";
+    addSubclassInlineButton.type = "button";
+    addSubclassInlineButton.textContent = "Add subclass";
+    addSubclassInlineButton.addEventListener("click", (event) => {
+      event.stopPropagation();
+      createSubclass(classModel);
+    });
+
     node.appendChild(header);
     node.appendChild(meta);
     node.appendChild(attributeList);
     node.appendChild(systemAttributeNote);
     node.appendChild(addAttributeButton);
+    node.appendChild(addSubclassInlineButton);
 
     node.addEventListener("pointerdown", (event) => {
       if (event.target.closest("button") || isNoDragTarget(event)) {
@@ -541,10 +647,11 @@ const exportJson = () => {
     classes: modelState.classes.map((item) => ({
       id: item.id,
       name: item.name,
-      attributes: [...(item.systemAttributes || systemAttributes), ...item.attributes],
-      extends: item.extends,
-      position: item.position,
-    })),
+    attributes: [...(item.systemAttributes || systemAttributes), ...item.attributes],
+    extends: item.extends,
+    position: item.position,
+    inheritableAttributes: item.inheritableAttributes || [],
+  })),
     relationships: modelState.relationships,
   };
 
@@ -572,6 +679,11 @@ const updateNextId = () => {
 
 const normalizeClass = (rawClass) => {
   const attributes = Array.isArray(rawClass.attributes) ? rawClass.attributes : [];
+  const inheritableAttributes = Array.isArray(rawClass.inheritableAttributes)
+    ? rawClass.inheritableAttributes.filter((attribute) =>
+        attributes.includes(attribute)
+      )
+    : [];
   const normalizedSystem = new Set(systemAttributes);
   const userAttributes = [];
   attributes.forEach((attribute) => {
@@ -590,6 +702,7 @@ const normalizeClass = (rawClass) => {
     name: rawClass.name || "Untitled",
     attributes: userAttributes,
     systemAttributes: Array.from(normalizedSystem),
+    inheritableAttributes,
     position: rawClass.position || { x: 120, y: 120 },
     collapsed: Boolean(rawClass.collapsed),
     extends: rawClass.extends || null,
