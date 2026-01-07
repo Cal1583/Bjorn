@@ -24,9 +24,43 @@
         </label>
         <button id="export-json">Export JSON</button>
       </div>
-      <div class="toolbar__group toolbar__legend">
-        <span class="toolbar__legend-title">Schema colors</span>
-        <div class="toolbar__legend-items">
+      <div class="toolbar__group">
+        <button class="toolbar__icon-button" id="open-model" aria-label="Open model view">
+          📦
+        </button>
+        <button id="open-legend">Legend</button>
+        <button id="open-colors">Edit Colors</button>
+      </div>
+      <div class="toolbar__group toolbar__status" id="status"></div>
+    </header>
+
+    <main class="canvas" id="canvas">
+      <svg class="canvas__lines" id="relationship-lines"></svg>
+    </main>
+
+    <aside class="modal" id="model-modal" hidden>
+      <div class="modal__header" data-drag-handle="true">
+        <h2 class="modal__title">Model JSON</h2>
+        <div class="modal__actions">
+          <button type="button" data-modal-action="size">Shrink</button>
+          <button type="button" data-modal-action="close">Close</button>
+        </div>
+      </div>
+      <div class="modal__body">
+        <textarea id="export-output" readonly></textarea>
+      </div>
+    </aside>
+
+    <aside class="modal" id="legend-modal" hidden>
+      <div class="modal__header" data-drag-handle="true">
+        <h2 class="modal__title">Schema color legend</h2>
+        <div class="modal__actions">
+          <button type="button" data-modal-action="size">Shrink</button>
+          <button type="button" data-modal-action="close">Close</button>
+        </div>
+      </div>
+      <div class="modal__body">
+        <div class="legend-list">
           <span class="legend-item">
             <span class="legend-swatch legend-swatch--class" aria-hidden="true"></span>
             Class
@@ -45,19 +79,44 @@
           </span>
         </div>
       </div>
-      <div class="toolbar__group toolbar__status" id="status"></div>
-    </header>
+    </aside>
 
-    <main class="canvas" id="canvas">
-      <svg class="canvas__lines" id="relationship-lines"></svg>
-    </main>
-
-    <aside class="export-panel" id="export-panel" hidden>
-      <div class="export-panel__header">
-        <h2>Model JSON</h2>
-        <button id="close-export">Close</button>
+    <aside class="modal" id="colors-modal" hidden>
+      <div class="modal__header" data-drag-handle="true">
+        <h2 class="modal__title">Edit schema colors</h2>
+        <div class="modal__actions">
+          <button type="button" data-modal-action="size">Shrink</button>
+          <button type="button" data-modal-action="close">Close</button>
+        </div>
       </div>
-      <textarea id="export-output" readonly></textarea>
+      <div class="modal__body">
+        <form id="colors-form" class="colors-form">
+          <label class="colors-form__row">
+            <span>Class</span>
+            <input name="class" type="text" placeholder="#3f9aae" />
+            <span class="colors-form__swatch" data-color-preview="class"></span>
+          </label>
+          <label class="colors-form__row">
+            <span>Attribute</span>
+            <input name="attribute" type="text" placeholder="#79c9c5" />
+            <span class="colors-form__swatch" data-color-preview="attribute"></span>
+          </label>
+          <label class="colors-form__row">
+            <span>Id</span>
+            <input name="id" type="text" placeholder="#ffe2af" />
+            <span class="colors-form__swatch" data-color-preview="id"></span>
+          </label>
+          <label class="colors-form__row">
+            <span>Relationship</span>
+            <input name="relationship" type="text" placeholder="#f96e5b" />
+            <span class="colors-form__swatch" data-color-preview="relationship"></span>
+          </label>
+          <p class="colors-form__error" id="colors-error" role="alert"></p>
+          <div class="colors-form__actions">
+            <button type="submit">Apply colors</button>
+          </div>
+        </form>
+      </div>
     </aside>
 
     <script src="app.js"></script>

@@ -1,14 +1,20 @@
 const canvas = document.getElementById("canvas");
 const linesSvg = document.getElementById("relationship-lines");
 const statusText = document.getElementById("status");
-const exportPanel = document.getElementById("export-panel");
 const exportOutput = document.getElementById("export-output");
+const modelModal = document.getElementById("model-modal");
+const legendModal = document.getElementById("legend-modal");
+const colorsModal = document.getElementById("colors-modal");
+const colorsForm = document.getElementById("colors-form");
+const colorsError = document.getElementById("colors-error");
 
 const addClassButton = document.getElementById("add-class");
 const addRelationshipButton = document.getElementById("add-relationship");
 const addSubclassButton = document.getElementById("add-subclass");
 const exportJsonButton = document.getElementById("export-json");
-const closeExportButton = document.getElementById("close-export");
+const openModelButton = document.getElementById("open-model");
+const openLegendButton = document.getElementById("open-legend");
+const openColorsButton = document.getElementById("open-colors");
 const relationshipTypeSelect = document.getElementById("relationship-type");
 
 let modelState = {
@@ -20,6 +26,14 @@ let dragState = null;
 let selectionMode = null;
 let firstSelectionId = null;
 let nextId = 1;
+let activeModalDrag = null;
+let modalZIndex = 5;
+
+const modalDefaults = {
+  "model-modal": { x: window.innerWidth - 420, y: 90 },
+  "legend-modal": { x: 40, y: 90 },
+  "colors-modal": { x: window.innerWidth - 420, y: 200 },
+};
 
 const relationshipLabels = {
   "one-to-many": "1 → *",
@@ -33,6 +47,10 @@ const getSchemaRelationshipColor = () =>
   getComputedStyle(document.documentElement)
     .getPropertyValue("--schema-relationship")
     .trim() || "#f96e5b";
+const getSchemaColor = (name) =>
+  getComputedStyle(document.documentElement)
+    .getPropertyValue(`--schema-${name}`)
+    .trim();
 const isIdAttribute = (attributeName) => {
   const normalized = attributeName.trim().toLowerCase();
   return normalized === "id" || normalized.endsWith("id");
@@ -390,6 +408,106 @@ const render = () => {
   renderLines();
 };
 
+const setModalPosition = (modal, position) => {
+  modal.style.left = `${position.x}px`;
+  modal.style.top = `${position.y}px`;
+  modal.style.right = "auto";
+};
+
+const bringModalToFront = (modal) => {
+  modalZIndex += 1;
+  modal.style.zIndex = modalZIndex;
+};
+
+const openModal = (modal) => {
+  modal.hidden = false;
+  if (!modal.dataset.positioned) {
+    const fallback = modalDefaults[modal.id] || { x: 60, y: 80 };
+    setModalPosition(modal, fallback);
+    modal.dataset.positioned = "true";
+  }
+  bringModalToFront(modal);
+};
+
+const closeModal = (modal) => {
+  modal.hidden = true;
+};
+
+const toggleModalSize = (modal, button) => {
+  const isCompact = modal.classList.toggle("modal--compact");
+  button.textContent = isCompact ? "Grow" : "Shrink";
+};
+
+const initializeModal = (modal) => {
+  const header = modal.querySelector("[data-drag-handle]");
+  const closeButton = modal.querySelector('[data-modal-action="close"]');
+  const sizeButton = modal.querySelector('[data-modal-action="size"]');
+
+  if (closeButton) {
+    closeButton.addEventListener("click", () => closeModal(modal));
+  }
+  if (sizeButton) {
+    sizeButton.addEventListener("click", () => toggleModalSize(modal, sizeButton));
+  }
+  if (header) {
+    header.addEventListener("pointerdown", (event) => {
+      if (event.target.closest("button")) {
+        return;
+      }
+      bringModalToFront(modal);
+      const rect = modal.getBoundingClientRect();
+      activeModalDrag = {
+        modal,
+        offsetX: event.clientX - rect.left,
+        offsetY: event.clientY - rect.top,
+      };
+      header.setPointerCapture(event.pointerId);
+    });
+
+    header.addEventListener("pointermove", (event) => {
+      if (!activeModalDrag || activeModalDrag.modal !== modal) {
+        return;
+      }
+      const nextPosition = {
+        x: event.clientX - activeModalDrag.offsetX,
+        y: event.clientY - activeModalDrag.offsetY,
+      };
+      setModalPosition(modal, nextPosition);
+    });
+
+    header.addEventListener("pointerup", () => {
+      activeModalDrag = null;
+    });
+
+    header.addEventListener("pointercancel", () => {
+      activeModalDrag = null;
+    });
+  }
+
+  modal.addEventListener("pointerdown", () => bringModalToFront(modal));
+};
+
+const hydrateColorForm = () => {
+  const fields = ["class", "attribute", "id", "relationship"];
+  fields.forEach((field) => {
+    const input = colorsForm.elements[field];
+    if (!input) {
+      return;
+    }
+    const value = getSchemaColor(field);
+    input.value = value;
+    const preview = colorsForm.querySelector(
+      `[data-color-preview="${field}"]`
+    );
+    if (preview) {
+      preview.style.background = value;
+    }
+  });
+  colorsError.textContent = "";
+};
+
+const isValidHex = (value) => /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(value);
+
 const exportJson = () => {
   const payload = {
     version: "1.0",
@@ -404,13 +522,18 @@ const exportJson = () => {
   };
 
   exportOutput.value = JSON.stringify(payload, null, 2);
-  exportPanel.hidden = false;
+  openModal(modelModal);
 };
 
 const initialize = () => {
   addClass({ x: 120, y: 140 }, { name: "Category", attributes: ["id", "name"] });
   addClass({ x: 420, y: 260 }, { name: "ItemType", attributes: ["id", "label"] });
   createRelationship("class-1", "class-2", "one-to-many");
+  [modelModal, legendModal, colorsModal].forEach((modal) => {
+    if (modal) {
+      initializeModal(modal);
+    }
+  });
 };
 
 addClassButton.addEventListener("click", () => {
@@ -432,8 +555,47 @@ addSubclassButton.addEventListener("click", () => {
 });
 
 exportJsonButton.addEventListener("click", exportJson);
-closeExportButton.addEventListener("click", () => {
-  exportPanel.hidden = true;
+openModelButton.addEventListener("click", () => openModal(modelModal));
+openLegendButton.addEventListener("click", () => openModal(legendModal));
+openColorsButton.addEventListener("click", () => {
+  hydrateColorForm();
+  openModal(colorsModal);
+});
+
+colorsForm.addEventListener("input", (event) => {
+  if (!(event.target instanceof HTMLInputElement)) {
+    return;
+  }
+  const preview = colorsForm.querySelector(
+    `[data-color-preview="${event.target.name}"]`
+  );
+  if (preview) {
+    preview.style.background = event.target.value.trim();
+  }
+});
+
+colorsForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  const formData = new FormData(colorsForm);
+  const entries = Object.fromEntries(formData.entries());
+  const invalidFields = Object.entries(entries).filter(
+    ([, value]) => !isValidHex(String(value).trim())
+  );
+
+  if (invalidFields.length) {
+    colorsError.textContent =
+      "Enter a valid hex color for every field (example: #1a2b3c).";
+    return;
+  }
+
+  Object.entries(entries).forEach(([key, value]) => {
+    document.documentElement.style.setProperty(
+      `--schema-${key}`,
+      String(value).trim()
+    );
+  });
+  colorsError.textContent = "";
+  renderLines();
 });
 
 window.addEventListener("resize", renderLines);

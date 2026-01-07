@@ -69,21 +69,14 @@ body {
   color: #5b6482;
 }
 
-.toolbar__legend {
-  flex-wrap: wrap;
-  gap: 0.6rem 1rem;
-}
-
-.toolbar__legend-title {
-  font-size: 0.8rem;
-  font-weight: 600;
-  color: #5b6482;
-}
-
-.toolbar__legend-items {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.65rem;
+.toolbar__icon-button {
+  width: 38px;
+  height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.1rem;
+  padding: 0;
 }
 
 .legend-item {
@@ -279,7 +272,7 @@ body {
   display: none;
 }
 
-.export-panel {
+.modal {
   position: absolute;
   top: 1.5rem;
   right: 1.5rem;
@@ -295,13 +288,44 @@ body {
   gap: 0.75rem;
 }
 
-.export-panel__header {
+.modal--compact {
+  width: 260px;
+}
+
+.modal__header {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 0.5rem;
+  cursor: grab;
 }
 
-.export-panel textarea {
+.modal__title {
+  font-size: 1.1rem;
+  margin: 0;
+}
+
+.modal__actions {
+  display: inline-flex;
+  gap: 0.35rem;
+}
+
+.modal__actions button {
+  border: none;
+  background: #eef1fb;
+  border-radius: 6px;
+  padding: 0.25rem 0.5rem;
+  cursor: pointer;
+  font-size: 0.8rem;
+}
+
+.modal__body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.modal textarea {
   width: 100%;
   height: 60vh;
   resize: none;
@@ -310,6 +334,64 @@ body {
   padding: 0.75rem;
   font-family: "SFMono-Regular", ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 0.85rem;
+}
+
+.legend-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.colors-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.colors-form__row {
+  display: grid;
+  grid-template-columns: 1fr 1.2fr auto;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  color: #3b4256;
+}
+
+.colors-form__row input {
+  padding: 0.4rem 0.6rem;
+  border-radius: 8px;
+  border: 1px solid #ccd3e9;
+  font-family: "SFMono-Regular", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.colors-form__swatch {
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+  border: 1px solid #ccd3e9;
+  background: #f4f6fb;
+}
+
+.colors-form__actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.colors-form__actions button {
+  border: none;
+  background: #3552c1;
+  color: #ffffff;
+  border-radius: 8px;
+  padding: 0.45rem 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.colors-form__error {
+  color: #cc3f3f;
+  font-size: 0.85rem;
+  min-height: 1rem;
+  margin: 0;
 }
 
 .relationship-label {
