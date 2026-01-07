@@ -70,15 +70,21 @@ const addClass = (position = { x: 120, y: 120 }, options = {}) => {
   return newClass;
 };
 
-const updateClass = (id, updates, options = { render: true }) => {
+const updateClass = (id, updates) => {
   const target = modelState.classes.find((item) => item.id === id);
   if (!target) {
     return;
   }
   Object.assign(target, updates);
-  if (options.render) {
-    render();
+  render();
+};
+
+const updateClassDraft = (id, updates) => {
+  const target = modelState.classes.find((item) => item.id === id);
+  if (!target) {
+    return;
   }
+  Object.assign(target, updates);
 };
 
 const addAttribute = (id) => {
@@ -216,11 +222,12 @@ const render = () => {
     title.addEventListener("pointerdown", (event) => event.stopPropagation());
     title.addEventListener("click", (event) => event.stopPropagation());
     title.addEventListener("input", (event) => {
-      updateClass(
-        classModel.id,
-        { name: event.target.value.trim() || "Untitled" },
-        { render: false }
-      );
+      updateClassDraft(classModel.id, {
+        name: event.target.value.trim() || "Untitled",
+      });
+    });
+    title.addEventListener("blur", () => {
+      render();
     });
 
     const actions = document.createElement("div");
@@ -284,7 +291,10 @@ const render = () => {
         const nextAttributes = [...classModel.attributes];
         nextAttributes[index] =
           event.target.textContent.trim() || "unnamed_attribute";
-        updateClass(classModel.id, { attributes: nextAttributes }, { render: false });
+        updateClassDraft(classModel.id, { attributes: nextAttributes });
+      });
+      attributeText.addEventListener("blur", () => {
+        render();
       });
 
       const deleteButton = document.createElement("button");
