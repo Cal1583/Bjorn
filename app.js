@@ -7,15 +7,21 @@ const legendModal = document.getElementById("legend-modal");
 const colorsModal = document.getElementById("colors-modal");
 const colorsForm = document.getElementById("colors-form");
 const colorsError = document.getElementById("colors-error");
+const classModal = document.getElementById("class-modal");
+const classForm = document.getElementById("class-form");
+const classNameInput = document.getElementById("class-name");
+const classError = document.getElementById("class-error");
+const classCancelButton = document.getElementById("class-cancel");
 
 const addClassButton = document.getElementById("add-class");
-const addRelationshipButton = document.getElementById("add-relationship");
 const addSubclassButton = document.getElementById("add-subclass");
-const exportJsonButton = document.getElementById("export-json");
-const openModelButton = document.getElementById("open-model");
 const openLegendButton = document.getElementById("open-legend");
 const openColorsButton = document.getElementById("open-colors");
-const relationshipTypeSelect = document.getElementById("relationship-type");
+const relationshipButtons = document.getElementById("relationship-buttons");
+const menuButton = document.getElementById("menu-button");
+const menuDropdown = document.getElementById("menu-dropdown");
+const newProjectButton = document.getElementById("new-project");
+const saveProjectButton = document.getElementById("save-project");
 
 let modelState = {
   classes: [],
@@ -28,6 +34,7 @@ let firstSelectionId = null;
 let nextId = 1;
 let activeModalDrag = null;
 let modalZIndex = 5;
+let relationshipType = "one-to-many";
 
 const modalDefaults = {
   "model-modal": { x: window.innerWidth - 420, y: 90 },
@@ -70,11 +77,23 @@ const resetSelectionMode = () => {
     .forEach((node) => node.removeAttribute("data-selected"));
 };
 
+const setRelationshipType = (type) => {
+  relationshipType = type;
+  if (!relationshipButtons) {
+    return;
+  }
+  relationshipButtons
+    .querySelectorAll("button")
+    .forEach((button) =>
+      button.classList.toggle("is-active", button.dataset.relationshipType === type)
+    );
+};
+
 const addClass = (position = { x: 120, y: 120 }, options = {}) => {
   const classId = `class-${nextId++}`;
   const newClass = {
     id: classId,
-    name: options.name || "NewClass",
+    name: options.name || "Untitled",
     attributes: options.attributes || [...defaultAttributes],
     position,
     collapsed: false,
@@ -146,7 +165,7 @@ const handleSelection = (classId) => {
   }
 
   if (selectionMode === "relationship") {
-    createRelationship(firstSelectionId, classId, relationshipTypeSelect.value);
+    createRelationship(firstSelectionId, classId, relationshipType);
   }
 
   if (selectionMode === "subclass") {
@@ -421,7 +440,7 @@ const bringModalToFront = (modal) => {
 
 const openModal = (modal) => {
   modal.hidden = false;
-  if (!modal.dataset.positioned) {
+  if (!modal.dataset.positioned && !modal.classList.contains("modal--centered")) {
     const fallback = modalDefaults[modal.id] || { x: 60, y: 80 };
     setModalPosition(modal, fallback);
     modal.dataset.positioned = "true";
@@ -431,6 +450,14 @@ const openModal = (modal) => {
 
 const closeModal = (modal) => {
   modal.hidden = true;
+};
+
+const toggleModal = (modal) => {
+  if (modal.hidden) {
+    openModal(modal);
+  } else {
+    closeModal(modal);
+  }
 };
 
 const toggleModalSize = (modal, button) => {
@@ -522,7 +549,14 @@ const exportJson = () => {
   };
 
   exportOutput.value = JSON.stringify(payload, null, 2);
-  openModal(modelModal);
+  toggleModal(modelModal);
+};
+
+const resetProject = () => {
+  modelState = { classes: [], relationships: [] };
+  nextId = 1;
+  resetSelectionMode();
+  render();
 };
 
 const initialize = () => {
@@ -534,17 +568,14 @@ const initialize = () => {
       initializeModal(modal);
     }
   });
+  setRelationshipType(relationshipType);
 };
 
 addClassButton.addEventListener("click", () => {
-  addClass({ x: 120 + modelState.classes.length * 40, y: 120 });
-});
-
-addRelationshipButton.addEventListener("click", () => {
-  selectionMode = "relationship";
-  firstSelectionId = null;
-  setStatus("Select the first class for the relationship.");
-  canvas.classList.add("canvas--linking");
+  classError.textContent = "";
+  classForm.reset();
+  openModal(classModal);
+  classNameInput.focus();
 });
 
 addSubclassButton.addEventListener("click", () => {
@@ -554,12 +585,54 @@ addSubclassButton.addEventListener("click", () => {
   canvas.classList.add("canvas--linking");
 });
 
-exportJsonButton.addEventListener("click", exportJson);
-openModelButton.addEventListener("click", () => openModal(modelModal));
-openLegendButton.addEventListener("click", () => openModal(legendModal));
+openLegendButton.addEventListener("click", () => toggleModal(legendModal));
 openColorsButton.addEventListener("click", () => {
   hydrateColorForm();
-  openModal(colorsModal);
+  toggleModal(colorsModal);
+  menuDropdown.hidden = true;
+  menuButton.setAttribute("aria-expanded", "false");
+});
+saveProjectButton.addEventListener("click", () => {
+  exportJson();
+  menuDropdown.hidden = true;
+  menuButton.setAttribute("aria-expanded", "false");
+});
+newProjectButton.addEventListener("click", () => {
+  resetProject();
+  closeModal(modelModal);
+  closeModal(legendModal);
+  closeModal(colorsModal);
+  menuDropdown.hidden = true;
+  menuButton.setAttribute("aria-expanded", "false");
+});
+
+menuButton.addEventListener("click", () => {
+  const isHidden = menuDropdown.hidden;
+  menuDropdown.hidden = !isHidden;
+  menuButton.setAttribute("aria-expanded", String(isHidden));
+});
+
+document.addEventListener("click", (event) => {
+  if (!menuDropdown || menuDropdown.hidden) {
+    return;
+  }
+  if (!event.target.closest(".sidebar__menu")) {
+    menuDropdown.hidden = true;
+    menuButton.setAttribute("aria-expanded", "false");
+  }
+});
+
+relationshipButtons.addEventListener("click", (event) => {
+  const button = event.target.closest("button[data-relationship-type]");
+  if (!button) {
+    return;
+  }
+  relationshipType = button.dataset.relationshipType || "one-to-many";
+  selectionMode = "relationship";
+  firstSelectionId = null;
+  setStatus("Select the first class for the relationship.");
+  canvas.classList.add("canvas--linking");
+  setRelationshipType(relationshipType);
 });
 
 colorsForm.addEventListener("input", (event) => {
@@ -596,6 +669,23 @@ colorsForm.addEventListener("submit", (event) => {
   });
   colorsError.textContent = "";
   renderLines();
+});
+
+classForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  const value = classNameInput.value.trim();
+  if (!value) {
+    classError.textContent = "Enter a class title before adding.";
+    classNameInput.focus();
+    return;
+  }
+  addClass({ x: 120 + modelState.classes.length * 40, y: 120 }, { name: value });
+  classError.textContent = "";
+  closeModal(classModal);
+});
+
+classCancelButton.addEventListener("click", () => {
+  closeModal(classModal);
 });
 
 window.addEventListener("resize", renderLines);
