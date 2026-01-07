@@ -15,8 +15,10 @@
           </button>
           <div class="menu-dropdown" id="menu-dropdown" hidden>
             <button id="new-project">New project</button>
+            <button id="open-project">Open...</button>
+            <button id="save-project">Save</button>
+            <button id="save-project-as">Save as...</button>
             <button id="open-colors">Edit colors</button>
-            <button id="save-project">Save project</button>
           </div>
         </div>
         <div class="sidebar__section">
@@ -52,7 +54,6 @@
       <div class="modal__header" data-drag-handle="true">
         <h2 class="modal__title">Model JSON</h2>
         <div class="modal__actions">
-          <button type="button" data-modal-action="size">Shrink</button>
           <button type="button" data-modal-action="close">Close</button>
         </div>
       </div>
@@ -65,7 +66,6 @@
       <div class="modal__header" data-drag-handle="true">
         <h2 class="modal__title">Schema color legend</h2>
         <div class="modal__actions">
-          <button type="button" data-modal-action="size">Shrink</button>
           <button type="button" data-modal-action="close">Close</button>
         </div>
       </div>
@@ -95,7 +95,6 @@
       <div class="modal__header" data-drag-handle="true">
         <h2 class="modal__title">Edit schema colors</h2>
         <div class="modal__actions">
-          <button type="button" data-modal-action="size">Shrink</button>
           <button type="button" data-modal-action="close">Close</button>
         </div>
       </div>
@@ -151,6 +150,8 @@
         </form>
       </div>
     </aside>
+
+    <input type="file" id="open-project-input" accept=".json" hidden />
 
     <script src="app.js"></script>
   </body>
