@@ -29,6 +29,14 @@ const relationshipLabels = {
 };
 
 const defaultAttributes = ["id"];
+const getSchemaRelationshipColor = () =>
+  getComputedStyle(document.documentElement)
+    .getPropertyValue("--schema-relationship")
+    .trim() || "#f96e5b";
+const isIdAttribute = (attributeName) => {
+  const normalized = attributeName.trim().toLowerCase();
+  return normalized === "id" || normalized.endsWith("id");
+};
 
 const setStatus = (message) => {
   statusText.textContent = message || "";
@@ -173,7 +181,7 @@ const renderLines = () => {
     line.setAttribute("y1", y1);
     line.setAttribute("x2", x2);
     line.setAttribute("y2", y2);
-    line.setAttribute("stroke", relationship.type === "inherits" ? "#8d5adf" : "#5d76d3");
+    line.setAttribute("stroke", getSchemaRelationshipColor());
     line.setAttribute("stroke-width", "2");
     line.setAttribute("stroke-linecap", "round");
     linesSvg.appendChild(line);
@@ -205,6 +213,13 @@ const render = () => {
 
     const header = document.createElement("div");
     header.className = "class-node__header";
+
+    const titleWrap = document.createElement("div");
+    titleWrap.className = "class-node__title-wrap";
+
+    const typeDot = document.createElement("span");
+    typeDot.className = "type-dot";
+    typeDot.setAttribute("aria-hidden", "true");
 
     const title = document.createElement("input");
     title.value = classModel.name;
@@ -246,7 +261,10 @@ const render = () => {
     actions.appendChild(collapseButton);
     actions.appendChild(removeButton);
 
-    header.appendChild(title);
+    titleWrap.appendChild(typeDot);
+    titleWrap.appendChild(title);
+
+    header.appendChild(titleWrap);
     header.appendChild(actions);
 
     const meta = document.createElement("div");
@@ -268,6 +286,13 @@ const render = () => {
     classModel.attributes.forEach((attribute, index) => {
       const attributeItem = document.createElement("li");
       attributeItem.className = "attribute";
+      if (isIdAttribute(attribute)) {
+        attributeItem.dataset.attributeType = "id";
+      }
+
+      const attributeMarker = document.createElement("span");
+      attributeMarker.className = "attribute__marker";
+      attributeMarker.setAttribute("aria-hidden", "true");
 
       const attributeText = document.createElement("span");
       attributeText.textContent = attribute;
@@ -280,9 +305,14 @@ const render = () => {
         event.stopPropagation()
       );
       attributeText.addEventListener("input", (event) => {
+        const nextValue = event.target.textContent.trim() || "unnamed_attribute";
         const nextAttributes = [...classModel.attributes];
-        nextAttributes[index] =
-          event.target.textContent.trim() || "unnamed_attribute";
+        nextAttributes[index] = nextValue;
+        if (isIdAttribute(nextValue)) {
+          attributeItem.dataset.attributeType = "id";
+        } else {
+          delete attributeItem.dataset.attributeType;
+        }
         updateClass(classModel.id, { attributes: nextAttributes }, { silent: true });
       });
 
@@ -294,6 +324,7 @@ const render = () => {
         removeAttribute(classModel.id, index);
       });
 
+      attributeItem.appendChild(attributeMarker);
       attributeItem.appendChild(attributeText);
       attributeItem.appendChild(deleteButton);
       attributeList.appendChild(attributeItem);

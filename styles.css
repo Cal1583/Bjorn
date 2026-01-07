@@ -3,6 +3,10 @@
   font-family: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
   background: #f4f6fb;
   color: #1f2430;
+  --schema-class: #3f9aae;
+  --schema-attribute: #79c9c5;
+  --schema-id: #ffe2af;
+  --schema-relationship: #f96e5b;
 }
 
 *,
@@ -65,6 +69,54 @@ body {
   color: #5b6482;
 }
 
+.toolbar__legend {
+  flex-wrap: wrap;
+  gap: 0.6rem 1rem;
+}
+
+.toolbar__legend-title {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #5b6482;
+}
+
+.toolbar__legend-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+}
+
+.legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.8rem;
+  color: #3b4256;
+}
+
+.legend-swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.legend-swatch--class {
+  background: var(--schema-class);
+}
+
+.legend-swatch--id {
+  background: var(--schema-id);
+}
+
+.legend-swatch--attribute {
+  background: var(--schema-attribute);
+}
+
+.legend-swatch--relationship {
+  background: var(--schema-relationship);
+}
+
 .canvas {
   position: relative;
   flex: 1;
@@ -94,6 +146,7 @@ body {
   min-width: 220px;
   background: #ffffff;
   border: 1px solid #d2d8ea;
+  border-top: 5px solid var(--schema-class);
   border-radius: 12px;
   box-shadow: 0 12px 24px rgba(31, 36, 48, 0.08);
   padding: 0.75rem;
@@ -115,6 +168,21 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: 0.5rem;
+}
+
+.class-node__title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex: 1;
+}
+
+.type-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--schema-class);
+  flex-shrink: 0;
 }
 
 .class-node__title {
@@ -163,6 +231,18 @@ body {
   background: #f7f8ff;
   border-radius: 8px;
   padding: 0.3rem 0.45rem;
+}
+
+.attribute__marker {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--schema-attribute);
+  flex-shrink: 0;
+}
+
+.attribute[data-attribute-type="id"] .attribute__marker {
+  background: var(--schema-id);
 }
 
 .attribute span {
@@ -233,7 +313,7 @@ body {
 }
 
 .relationship-label {
-  fill: #5b6482;
+  fill: var(--schema-relationship);
   font-size: 12px;
   font-weight: 600;
 }
