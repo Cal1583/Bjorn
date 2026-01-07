@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ClassBuilder - Visual Data Modeling</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="toolbar">
+      <div class="toolbar__group">
+        <button id="add-class">Add Class</button>
+        <button id="add-relationship">Add Relationship</button>
+        <button id="add-subclass">Add Subclass</button>
+      </div>
+      <div class="toolbar__group">
+        <label>
+          Relationship Type
+          <select id="relationship-type">
+            <option value="one-to-many">One-to-many</option>
+            <option value="many-to-many">Many-to-many</option>
+            <option value="parent-child">Parent/child</option>
+          </select>
+        </label>
+        <button id="export-json">Export JSON</button>
+      </div>
+      <div class="toolbar__group toolbar__status" id="status"></div>
+    </header>
+
+    <main class="canvas" id="canvas">
+      <svg class="canvas__lines" id="relationship-lines"></svg>
+    </main>
+
+    <aside class="export-panel" id="export-panel" hidden>
+      <div class="export-panel__header">
+        <h2>Model JSON</h2>
+        <button id="close-export">Close</button>
+      </div>
+      <textarea id="export-output" readonly></textarea>
+    </aside>
+
+    <script src="app.js"></script>
+  </body>
+</html>
