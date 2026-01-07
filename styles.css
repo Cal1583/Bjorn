@@ -344,6 +344,10 @@ body {
   gap: 0.75rem;
 }
 
+.modal[hidden] {
+  display: none;
+}
+
 .modal--centered {
   position: fixed;
   top: 50%;
