@@ -7,36 +7,46 @@
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
-    <header class="toolbar">
-      <div class="toolbar__group">
-        <button id="add-class">Add Class</button>
-        <button id="add-relationship">Add Relationship</button>
-        <button id="add-subclass">Add Subclass</button>
-      </div>
-      <div class="toolbar__group">
-        <label>
-          Relationship Type
-          <select id="relationship-type">
-            <option value="one-to-many">One-to-many</option>
-            <option value="many-to-many">Many-to-many</option>
-            <option value="parent-child">Parent/child</option>
-          </select>
-        </label>
-        <button id="export-json">Export JSON</button>
-      </div>
-      <div class="toolbar__group">
-        <button class="toolbar__icon-button" id="open-model" aria-label="Open model view">
-          📦
-        </button>
-        <button id="open-legend">Legend</button>
-        <button id="open-colors">Edit Colors</button>
-      </div>
-      <div class="toolbar__group toolbar__status" id="status"></div>
-    </header>
+    <div class="app-layout">
+      <aside class="sidebar">
+        <div class="sidebar__menu">
+          <button class="menu-button" id="menu-button" aria-expanded="false">
+            ☰ Menu
+          </button>
+          <div class="menu-dropdown" id="menu-dropdown" hidden>
+            <button id="new-project">New project</button>
+            <button id="open-colors">Edit colors</button>
+            <button id="save-project">Save project</button>
+          </div>
+        </div>
+        <div class="sidebar__section">
+          <button id="add-class">Add Class</button>
+          <button id="add-subclass">Add Subclass</button>
+        </div>
+        <div class="sidebar__section">
+          <p class="sidebar__label">Set relationship</p>
+          <div class="relationship-buttons" id="relationship-buttons">
+            <button type="button" data-relationship-type="one-to-many">
+              1 → *
+            </button>
+            <button type="button" data-relationship-type="many-to-many">
+              * ↔ *
+            </button>
+            <button type="button" data-relationship-type="parent-child">
+              ⤴
+            </button>
+          </div>
+        </div>
+        <div class="sidebar__section">
+          <button id="open-legend">Legend</button>
+        </div>
+        <div class="sidebar__status" id="status"></div>
+      </aside>
 
-    <main class="canvas" id="canvas">
-      <svg class="canvas__lines" id="relationship-lines"></svg>
-    </main>
+      <main class="canvas" id="canvas">
+        <svg class="canvas__lines" id="relationship-lines"></svg>
+      </main>
+    </div>
 
     <aside class="modal" id="model-modal" hidden>
       <div class="modal__header" data-drag-handle="true">
@@ -114,6 +124,29 @@
           <p class="colors-form__error" id="colors-error" role="alert"></p>
           <div class="colors-form__actions">
             <button type="submit">Apply colors</button>
+          </div>
+        </form>
+      </div>
+    </aside>
+
+    <aside class="modal modal--centered" id="class-modal" hidden>
+      <div class="modal__header">
+        <h2 class="modal__title">Add class</h2>
+      </div>
+      <div class="modal__body">
+        <form id="class-form" class="class-form">
+          <label class="class-form__label" for="class-name">Class title</label>
+          <input
+            id="class-name"
+            name="className"
+            type="text"
+            placeholder="Enter class title"
+            autocomplete="off"
+          />
+          <p class="class-form__error" id="class-error" role="alert"></p>
+          <div class="class-form__actions">
+            <button type="submit">Add class</button>
+            <button type="button" id="class-cancel">Close</button>
           </div>
         </form>
       </div>
