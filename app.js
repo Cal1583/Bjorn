@@ -18,8 +18,6 @@ const addSubclassButton = document.getElementById("add-subclass");
 const openLegendButton = document.getElementById("open-legend");
 const openColorsButton = document.getElementById("open-colors");
 const relationshipButtons = document.getElementById("relationship-buttons");
-const menuButton = document.getElementById("menu-button");
-const menuDropdown = document.getElementById("menu-dropdown");
 const newProjectButton = document.getElementById("new-project");
 const openProjectButton = document.getElementById("open-project");
 const saveProjectButton = document.getElementById("save-project");
@@ -698,34 +696,24 @@ openLegendButton.addEventListener("click", () => toggleModal(legendModal));
 openColorsButton.addEventListener("click", () => {
   hydrateColorForm();
   toggleModal(colorsModal);
-  menuDropdown.hidden = true;
-  menuButton.setAttribute("aria-expanded", "false");
 });
 saveProjectButton.addEventListener("click", () => {
   saveProject();
-  menuDropdown.hidden = true;
-  menuButton.setAttribute("aria-expanded", "false");
 });
 saveProjectAsButton.addEventListener("click", () => {
   saveProjectAs();
-  menuDropdown.hidden = true;
-  menuButton.setAttribute("aria-expanded", "false");
 });
 openProjectButton.addEventListener("click", () => {
   if (openProjectInput) {
     openProjectInput.value = "";
     openProjectInput.click();
   }
-  menuDropdown.hidden = true;
-  menuButton.setAttribute("aria-expanded", "false");
 });
 newProjectButton.addEventListener("click", () => {
   resetProject();
   closeModal(modelModal);
   closeModal(legendModal);
   closeModal(colorsModal);
-  menuDropdown.hidden = true;
-  menuButton.setAttribute("aria-expanded", "false");
 });
 
 if (openProjectInput) {
@@ -744,22 +732,6 @@ if (openProjectInput) {
     reader.readAsText(file);
   });
 }
-
-menuButton.addEventListener("click", () => {
-  const isHidden = menuDropdown.hidden;
-  menuDropdown.hidden = !isHidden;
-  menuButton.setAttribute("aria-expanded", String(isHidden));
-});
-
-document.addEventListener("click", (event) => {
-  if (!menuDropdown || menuDropdown.hidden) {
-    return;
-  }
-  if (!event.target.closest(".sidebar__menu")) {
-    menuDropdown.hidden = true;
-    menuButton.setAttribute("aria-expanded", "false");
-  }
-});
 
 relationshipButtons.addEventListener("click", (event) => {
   const button = event.target.closest("button[data-relationship-type]");
