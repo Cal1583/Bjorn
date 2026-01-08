@@ -148,12 +148,11 @@ body {
   backdrop-filter: blur(6px);
 }
 
-.mini-toolbar__section--search {
-  flex-direction: column;
-  align-items: flex-start;
+.mini-toolbar__section--primary {
+  gap: 0.65rem;
 }
 
-.mini-toolbar__section--actions button,
+.mini-toolbar__section--primary button,
 .mini-toolbar__section--view button {
   padding: 0.4rem 0.6rem;
   border-radius: 8px;
@@ -163,13 +162,13 @@ body {
   cursor: pointer;
 }
 
-.mini-toolbar__section--actions button:disabled,
+.mini-toolbar__section--primary button:disabled,
 .mini-toolbar__section--view button:disabled {
   cursor: not-allowed;
   opacity: 0.5;
 }
 
-.mini-toolbar__section--actions button.is-active,
+.mini-toolbar__section--primary button.is-active,
 .mini-toolbar__section--view button.is-active {
   border-color: #5d76d3;
   background: #e6ebff;
@@ -190,6 +189,13 @@ body {
   padding: 0.4rem 0.6rem;
   min-width: 200px;
   font-size: 0.85rem;
+}
+
+.view-toolbar {
+  position: absolute;
+  right: 1rem;
+  bottom: 1rem;
+  z-index: 4;
 }
 
 .mini-toolbar__section--view {
