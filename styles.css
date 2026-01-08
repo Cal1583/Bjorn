@@ -85,6 +85,18 @@ body {
   color: #5b6482;
 }
 
+.template-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.template-empty {
+  margin: 0;
+  font-size: 0.8rem;
+  color: #7a829e;
+}
+
 .sidebar__divider {
   border: none;
   border-top: 1px solid #e4e7ef;
@@ -555,6 +567,32 @@ body {
   gap: 0.5rem;
 }
 
+.template-menu {
+  position: absolute;
+  z-index: 11;
+  background: #ffffff;
+  border: 1px solid #d2d8ea;
+  border-radius: 10px;
+  padding: 0.4rem;
+  min-width: 160px;
+  box-shadow: 0 12px 24px rgba(31, 36, 48, 0.12);
+}
+
+.template-menu button {
+  width: 100%;
+  border: none;
+  background: #f3f5ff;
+  border-radius: 6px;
+  padding: 0.4rem 0.6rem;
+  text-align: left;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.template-menu button:hover {
+  background: #e6ebff;
+}
+
 .attribute-popover__input {
   width: 100%;
   border-radius: 8px;
@@ -875,6 +913,7 @@ body {
 
 :root[data-theme="dark"] .sidebar__label,
 :root[data-theme="dark"] .sidebar__status,
+:root[data-theme="dark"] .template-empty,
 :root[data-theme="dark"] .legend-item,
 :root[data-theme="dark"] .mini-toolbar__label,
 :root[data-theme="dark"] .class-node__meta,
@@ -906,6 +945,16 @@ body {
   background: #1f2639;
   border-color: #2b344d;
   box-shadow: 0 12px 24px rgba(5, 8, 16, 0.45);
+}
+
+:root[data-theme="dark"] .class-node[data-selected="true"] {
+  border-color: #7f8ff0;
+  box-shadow: 0 0 0 3px rgba(127, 143, 240, 0.4);
+}
+
+:root[data-theme="dark"] .class-node[data-active="true"] {
+  border-color: #9aa7ff;
+  box-shadow: 0 0 0 2px rgba(154, 167, 255, 0.35);
 }
 
 :root[data-theme="dark"] .attribute {
@@ -964,6 +1013,21 @@ body {
   background: #1a2031;
   border-color: #2a3147;
   box-shadow: 0 12px 24px rgba(5, 8, 16, 0.6);
+}
+
+:root[data-theme="dark"] .template-menu {
+  background: #1a2031;
+  border-color: #2a3147;
+  box-shadow: 0 12px 24px rgba(5, 8, 16, 0.6);
+}
+
+:root[data-theme="dark"] .template-menu button {
+  background: #2a3147;
+  color: #e2e7f5;
+}
+
+:root[data-theme="dark"] .template-menu button:hover {
+  background: #334062;
 }
 
 :root[data-theme="dark"] .attribute-popover__input {
