@@ -248,7 +248,8 @@ body {
   display: flex;
   align-items: center;
   gap: 0.4rem;
-  background: var(--schema-attribute);
+  background: #f5f7ff;
+  border: 1px solid #e2e7f5;
   border-radius: 8px;
   padding: 0.3rem 0.45rem;
 }
@@ -279,10 +280,11 @@ body {
 }
 
 .attribute[data-attribute-type="id"] {
-  background: var(--schema-id);
+  background: #fff3d8;
+  border-color: #f3d9a4;
 }
 
-.attribute span {
+.attribute__name {
   flex: 1;
   outline: none;
   cursor: text;
@@ -291,15 +293,86 @@ body {
   background: transparent;
 }
 
-.attribute button {
+.attribute__pill {
+  border: 1px solid #cbd3ea;
+  background: #f0f3ff;
+  border-radius: 999px;
+  padding: 0.15rem 0.5rem;
+  font-size: 0.75rem;
+  color: #3b4256;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.attribute__pill:hover {
+  border-color: #7f93d9;
+  background: #e6ebff;
+}
+
+.attribute__pill.is-placeholder {
+  color: #7a829e;
+  font-style: italic;
+}
+
+.attribute__delete {
   border: none;
   background: transparent;
   cursor: pointer;
   color: #7c849d;
 }
 
-.attribute button:hover {
+.attribute__delete:hover {
   color: #cc3f3f;
+}
+
+.attribute-popover {
+  position: absolute;
+  z-index: 10;
+  background: #ffffff;
+  border: 1px solid #d2d8ea;
+  border-radius: 10px;
+  padding: 0.5rem;
+  min-width: 180px;
+  box-shadow: 0 12px 24px rgba(31, 36, 48, 0.12);
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.attribute-popover__input {
+  width: 100%;
+  border-radius: 8px;
+  border: 1px solid #ccd3e9;
+  padding: 0.35rem 0.5rem;
+  font-size: 0.8rem;
+}
+
+.attribute-popover__list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  max-height: 160px;
+  overflow-y: auto;
+}
+
+.attribute-popover__option {
+  border: none;
+  background: #f3f5ff;
+  border-radius: 6px;
+  padding: 0.35rem 0.5rem;
+  text-align: left;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.attribute-popover__option:hover {
+  background: #e6ebff;
+}
+
+.attribute-popover__empty,
+.attribute-popover__hint {
+  font-size: 0.75rem;
+  color: #7a829e;
 }
 
 .add-attribute {
