@@ -24,6 +24,7 @@ const openColorsButton = document.getElementById("open-colors");
 const zoomInButton = document.getElementById("zoom-in");
 const zoomOutButton = document.getElementById("zoom-out");
 const zoomResetButton = document.getElementById("zoom-reset");
+const zoomDisplay = document.getElementById("zoom-display");
 const relationshipButtons = document.getElementById("relationship-buttons");
 const newProjectButton = document.getElementById("new-project");
 const openProjectButton = document.getElementById("open-project");
@@ -39,6 +40,7 @@ const fitToScreenButton = document.getElementById("fit-to-screen");
 const gridToggleButton = document.getElementById("grid-toggle");
 const snapToggleButton = document.getElementById("snap-toggle");
 const viewDefinitionsButton = document.getElementById("view-definitions");
+const themeToggleButton = document.getElementById("theme-toggle");
 
 let modelState = {
   classes: [],
@@ -63,6 +65,7 @@ let searchQuery = "";
 let isGridVisible = false;
 let isSnapEnabled = false;
 let isViewOptionsOpen = false;
+let isDarkMode = false;
 
 const zoomSettings = {
   min: 0.5,
@@ -71,6 +74,7 @@ const zoomSettings = {
 };
 
 const gridSize = 20;
+const classNodeWidthEstimate = 260;
 
 const historyState = {
   undoStack: [],
@@ -433,6 +437,9 @@ const setZoomLevel = (value) => {
   const clamped = Math.min(zoomSettings.max, Math.max(zoomSettings.min, value));
   zoomLevel = Number(clamped.toFixed(2));
   canvasContent.style.transform = `scale(${zoomLevel})`;
+  if (zoomDisplay) {
+    zoomDisplay.textContent = `${Math.round(zoomLevel * 100)}%`;
+  }
   if (zoomResetButton) {
     zoomResetButton.textContent = `${Math.round(zoomLevel * 100)}%`;
   }
@@ -454,6 +461,26 @@ const getCanvasPoint = (event) => {
   const x = (event.clientX - rect.left) / zoomLevel;
   const y = (event.clientY - rect.top) / zoomLevel;
   return { x, y };
+};
+
+const getRightmostEdge = () =>
+  modelState.classes.reduce(
+    (maxEdge, classModel) =>
+      Math.max(maxEdge, classModel.position.x + classNodeWidthEstimate),
+    0
+  );
+
+const setThemeMode = (darkMode) => {
+  isDarkMode = darkMode;
+  if (isDarkMode) {
+    document.documentElement.dataset.theme = "dark";
+  } else {
+    delete document.documentElement.dataset.theme;
+  }
+  if (themeToggleButton) {
+    themeToggleButton.setAttribute("aria-pressed", String(isDarkMode));
+    themeToggleButton.textContent = isDarkMode ? "Light mode" : "Dark mode";
+  }
 };
 
 const fitToScreen = () => {
@@ -531,6 +558,7 @@ const addClass = (position = { x: 120, y: 120 }, options = {}) => {
     extends: options.extends || null,
     kind: options.kind === "instance" ? "instance" : "template",
     templateId: options.templateId || null,
+    instanceKind: options.instanceKind || null,
   };
   modelState.classes.push(newClass);
   render();
@@ -854,6 +882,12 @@ const render = () => {
     node.className = `class-node${classModel.collapsed ? " collapsed" : ""}`;
     if (classModel.kind === "instance") {
       node.classList.add("class-node--instance");
+      if (classModel.instanceKind === "core") {
+        node.classList.add("class-node--core-instance");
+      }
+    }
+    if (classModel.extends) {
+      node.classList.add("class-node--subclass");
     }
     if (dragState && dragState.id === classModel.id) {
       node.classList.add("is-dragging");
@@ -1298,7 +1332,15 @@ const initializeModal = (modal) => {
 };
 
 const hydrateColorForm = () => {
-  const fields = ["class", "attribute", "id", "relationship"];
+  const fields = [
+    "class",
+    "subclass",
+    "instance",
+    "core-instance",
+    "attribute",
+    "id",
+    "relationship",
+  ];
   fields.forEach((field) => {
     const input = colorsForm.elements[field];
     if (!input) {
@@ -1337,6 +1379,7 @@ const exportJson = () => {
       position: item.position,
       inheritableAttributes: item.inheritableAttributes || [],
       collapsed: item.collapsed,
+      instanceKind: item.instanceKind || null,
     })),
     relationships: modelState.relationships,
   };
@@ -1423,6 +1466,7 @@ const normalizeClass = (rawClass) => {
     extends: rawClass.extends || null,
     kind: rawClass.kind === "instance" ? "instance" : "template",
     templateId: rawClass.templateId || null,
+    instanceKind: rawClass.instanceKind || null,
   };
 };
 
@@ -1465,35 +1509,54 @@ const createInstanceFromTemplate = (templateClass, options = {}) => {
     inheritableAttributes: [],
     kind: "instance",
     templateId: templateClass.id,
+    instanceKind: options.instanceKind || "standard",
     recordHistory: options.recordHistory,
   });
 };
 
 const createCoreInstanceGraph = (templateClass) => {
-  const instance = createInstanceFromTemplate(templateClass);
   const related = modelState.relationships.filter(
     (relationship) => relationship.from === templateClass.id
   );
+  const templates = [
+    templateClass,
+    ...related
+      .map((relationship) =>
+        modelState.classes.find((item) => item.id === relationship.to)
+      )
+      .filter(Boolean),
+  ];
+  const minTemplateX = templates.reduce(
+    (minX, item) => Math.min(minX, item.position.x),
+    Number.POSITIVE_INFINITY
+  );
+  const offsetX = getRightmostEdge() + 120 - minTemplateX;
+  const instance = createInstanceFromTemplate(templateClass, {
+    position: {
+      x: templateClass.position.x + offsetX,
+      y: templateClass.position.y,
+    },
+    instanceKind: "core",
+  });
   if (!related.length) {
     return instance;
   }
 
-  const radius = 220;
-  related.forEach((relationship, index) => {
+  related.forEach((relationship) => {
     const targetTemplate = modelState.classes.find(
       (item) => item.id === relationship.to
     );
     if (!targetTemplate) {
       return;
     }
-    const angle = (Math.PI * 2 * index) / Math.max(related.length, 1);
     const position = {
-      x: instance.position.x + Math.cos(angle) * radius,
-      y: instance.position.y + Math.sin(angle) * radius,
+      x: targetTemplate.position.x + offsetX,
+      y: targetTemplate.position.y,
     };
     const relatedInstance = createInstanceFromTemplate(targetTemplate, {
       name: `${instance.name} — ${targetTemplate.name}`,
       position,
+      instanceKind: "core",
     });
     createRelationship(instance.id, relatedInstance.id, relationship.type, {
       generateOnInstantiate: false,
@@ -1686,6 +1749,7 @@ const initialize = () => {
   setGridVisibility(false);
   setSnapEnabled(false);
   setViewOptionsOpen(false);
+  setThemeMode(false);
   resetHistory();
 };
 
@@ -1763,9 +1827,17 @@ newProjectButton.addEventListener("click", () => {
   closeModal(colorsModal);
 });
 
-zoomInButton.addEventListener("click", () => adjustZoom(1));
-zoomOutButton.addEventListener("click", () => adjustZoom(-1));
-zoomResetButton.addEventListener("click", () => setZoomLevel(1));
+if (zoomInButton) {
+  zoomInButton.addEventListener("click", () => adjustZoom(1));
+}
+
+if (zoomOutButton) {
+  zoomOutButton.addEventListener("click", () => adjustZoom(-1));
+}
+
+if (zoomResetButton) {
+  zoomResetButton.addEventListener("click", () => setZoomLevel(1));
+}
 
 if (searchInput) {
   searchInput.addEventListener("input", (event) => {
@@ -1808,6 +1880,12 @@ if (snapToggleButton) {
 if (viewDefinitionsButton) {
   viewDefinitionsButton.addEventListener("click", () =>
     toggleModal(legendModal)
+  );
+}
+
+if (themeToggleButton) {
+  themeToggleButton.addEventListener("click", () =>
+    setThemeMode(!isDarkMode)
   );
 }
 
