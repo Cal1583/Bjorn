@@ -18,6 +18,7 @@ const addClassButton = document.getElementById("add-class");
 const addSubclassButton = document.getElementById("add-subclass");
 const createInstanceButton = document.getElementById("create-instance");
 const createCoreInstanceButton = document.getElementById("create-core-instance");
+const createHalfCoreButton = document.getElementById("create-half-core");
 const openLegendButton = document.getElementById("open-legend");
 const openModelButton = document.getElementById("open-model");
 const openColorsButton = document.getElementById("open-colors");
@@ -41,10 +42,13 @@ const gridToggleButton = document.getElementById("grid-toggle");
 const snapToggleButton = document.getElementById("snap-toggle");
 const viewDefinitionsButton = document.getElementById("view-definitions");
 const themeToggleButton = document.getElementById("theme-toggle");
+const templateList = document.getElementById("template-list");
+const templateEmpty = document.getElementById("template-empty");
 
 let modelState = {
   classes: [],
   relationships: [],
+  templates: [],
 };
 
 let dragState = null;
@@ -66,6 +70,7 @@ let isGridVisible = false;
 let isSnapEnabled = false;
 let isViewOptionsOpen = false;
 let isDarkMode = false;
+let activeTemplateMenu = null;
 
 const zoomSettings = {
   min: 0.5,
@@ -77,6 +82,7 @@ const gridSize = 20;
 const classNodeWidthEstimate = 260;
 const canvasDefaultSize = { width: 2400, height: 1800 };
 const canvasPadding = 200;
+const canvasOriginOffset = 360;
 
 const historyState = {
   undoStack: [],
@@ -139,6 +145,12 @@ const createAttribute = (name, options = {}) => ({
 const cloneAttribute = (attribute) => ({
   ...attribute,
   id: generateAttributeId(),
+});
+
+const cloneAttributeWithoutValue = (attribute) => ({
+  ...attribute,
+  id: generateAttributeId(),
+  value: "",
 });
 
 const normalizeAttribute = (attribute) => {
@@ -351,6 +363,118 @@ const openPopover = (anchor, contentBuilder) => {
   };
 };
 
+const closeTemplateMenu = () => {
+  if (!activeTemplateMenu) {
+    return;
+  }
+  activeTemplateMenu.cleanup();
+  activeTemplateMenu = null;
+};
+
+const openTemplateMenu = (position, classModel) => {
+  closeTemplateMenu();
+  const menu = document.createElement("div");
+  menu.className = "template-menu";
+  menu.style.left = `${position.x}px`;
+  menu.style.top = `${position.y}px`;
+  menu.setAttribute("data-no-drag", "true");
+
+  const addButton = document.createElement("button");
+  addButton.type = "button";
+  addButton.textContent = "Save to templates";
+  addButton.addEventListener("click", () => {
+    addTemplateForClass(classModel.id);
+    closeTemplateMenu();
+  });
+
+  menu.appendChild(addButton);
+  document.body.appendChild(menu);
+
+  const handlePointerDown = (event) => {
+    if (menu.contains(event.target)) {
+      return;
+    }
+    closeTemplateMenu();
+  };
+  const handleKeyDown = (event) => {
+    if (event.key === "Escape") {
+      closeTemplateMenu();
+    }
+  };
+
+  document.addEventListener("pointerdown", handlePointerDown);
+  document.addEventListener("keydown", handleKeyDown);
+
+  activeTemplateMenu = {
+    cleanup: () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+      menu.remove();
+    },
+  };
+};
+
+const renderTemplateList = () => {
+  if (!templateList) {
+    return;
+  }
+  templateList.innerHTML = "";
+  const entries = Array.isArray(modelState.templates)
+    ? modelState.templates
+    : [];
+  const templates = entries
+    .map((classId) => modelState.classes.find((item) => item.id === classId))
+    .filter(Boolean);
+  modelState.templates = templates.map((template) => template.id);
+
+  if (!templates.length) {
+    if (templateEmpty) {
+      templateEmpty.hidden = false;
+    }
+    return;
+  }
+  if (templateEmpty) {
+    templateEmpty.hidden = true;
+  }
+
+  templates.forEach((templateClass) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = templateClass.name;
+    button.addEventListener("click", () => {
+      resetSelectionMode();
+      if (templateClass.kind !== "template") {
+        setStatus("Templates must be base classes.");
+        return;
+      }
+      const instance = createCoreInstanceGraph(templateClass);
+      setActiveClass(instance.id);
+    });
+    templateList.appendChild(button);
+  });
+};
+
+const addTemplateForClass = (classId) => {
+  const classModel = modelState.classes.find((item) => item.id === classId);
+  if (!classModel) {
+    return;
+  }
+  if (classModel.kind !== "template") {
+    setStatus("Only template classes can be saved as templates.");
+    return;
+  }
+  if (!Array.isArray(modelState.templates)) {
+    modelState.templates = [];
+  }
+  if (modelState.templates.includes(classId)) {
+    setStatus(`Template "${classModel.name}" is already saved.`);
+    return;
+  }
+  modelState.templates.push(classId);
+  renderTemplateList();
+  setStatus(`Template "${classModel.name}" saved.`);
+};
+
 const getProjectUnits = () => {
   const units = new Set();
   modelState.classes.forEach((classModel) => {
@@ -460,8 +584,8 @@ const snapPositionToGrid = (position) => ({
 
 const getCanvasPoint = (event) => {
   const rect = canvasContent.getBoundingClientRect();
-  const x = (event.clientX - rect.left) / zoomLevel;
-  const y = (event.clientY - rect.top) / zoomLevel;
+  const x = (event.clientX - rect.left) / zoomLevel - canvasOriginOffset;
+  const y = (event.clientY - rect.top) / zoomLevel - canvasOriginOffset;
   return { x, y };
 };
 
@@ -878,12 +1002,18 @@ const renderLines = () => {
 const updateCanvasBounds = () => {
   const nodes = Array.from(canvasContent.querySelectorAll(".class-node"));
   if (!nodes.length) {
-    canvasContent.style.width = `${canvasDefaultSize.width}px`;
-    canvasContent.style.height = `${canvasDefaultSize.height}px`;
+    canvasContent.style.width = `${
+      canvasDefaultSize.width + canvasOriginOffset * 2
+    }px`;
+    canvasContent.style.height = `${
+      canvasDefaultSize.height + canvasOriginOffset * 2
+    }px`;
     return;
   }
   const bounds = nodes.reduce(
     (acc, node) => {
+      acc.minLeft = Math.min(acc.minLeft, node.offsetLeft);
+      acc.minTop = Math.min(acc.minTop, node.offsetTop);
       acc.maxRight = Math.max(acc.maxRight, node.offsetLeft + node.offsetWidth);
       acc.maxBottom = Math.max(
         acc.maxBottom,
@@ -891,15 +1021,22 @@ const updateCanvasBounds = () => {
       );
       return acc;
     },
-    { maxRight: 0, maxBottom: 0 }
+    {
+      minLeft: Number.POSITIVE_INFINITY,
+      minTop: Number.POSITIVE_INFINITY,
+      maxRight: 0,
+      maxBottom: 0,
+    }
   );
   const nextWidth = Math.max(
-    canvasDefaultSize.width,
-    bounds.maxRight + canvasPadding
+    canvasDefaultSize.width + canvasOriginOffset * 2,
+    bounds.maxRight + canvasPadding,
+    bounds.maxRight + canvasOriginOffset
   );
   const nextHeight = Math.max(
-    canvasDefaultSize.height,
-    bounds.maxBottom + canvasPadding
+    canvasDefaultSize.height + canvasOriginOffset * 2,
+    bounds.maxBottom + canvasPadding,
+    bounds.maxBottom + canvasOriginOffset
   );
   canvasContent.style.width = `${nextWidth}px`;
   canvasContent.style.height = `${nextHeight}px`;
@@ -907,6 +1044,7 @@ const updateCanvasBounds = () => {
 
 const render = () => {
   closeActivePopover();
+  closeTemplateMenu();
   canvasContent.querySelectorAll(".class-node").forEach((node) => node.remove());
 
   modelState.classes.forEach((classModel) => {
@@ -924,8 +1062,8 @@ const render = () => {
     if (dragState && dragState.id === classModel.id) {
       node.classList.add("is-dragging");
     }
-    node.style.left = `${classModel.position.x}px`;
-    node.style.top = `${classModel.position.y}px`;
+    node.style.left = `${classModel.position.x + canvasOriginOffset}px`;
+    node.style.top = `${classModel.position.y + canvasOriginOffset}px`;
     node.dataset.classId = classModel.id;
     if (activeClassId === classModel.id) {
       node.dataset.active = "true";
@@ -980,6 +1118,11 @@ const render = () => {
       modelState.relationships = modelState.relationships.filter(
         (rel) => rel.from !== classModel.id && rel.to !== classModel.id
       );
+      if (Array.isArray(modelState.templates)) {
+        modelState.templates = modelState.templates.filter(
+          (templateId) => templateId !== classModel.id
+        );
+      }
       if (activeClassId === classModel.id) {
         clearActiveClass();
       }
@@ -1270,12 +1413,21 @@ const render = () => {
       handleSelection(classModel.id);
     });
 
+    node.addEventListener("contextmenu", (event) => {
+      event.preventDefault();
+      if (selectionMode) {
+        return;
+      }
+      openTemplateMenu({ x: event.clientX, y: event.clientY }, classModel);
+    });
+
     canvasContent.appendChild(node);
   });
 
   updateCanvasBounds();
   renderLines();
   updateSearchHighlights();
+  renderTemplateList();
 
   if (pendingAttributeFocusId) {
     const target = document.querySelector(
@@ -1415,13 +1567,14 @@ const exportJson = () => {
       instanceKind: item.instanceKind || null,
     })),
     relationships: modelState.relationships,
+    templates: Array.isArray(modelState.templates) ? modelState.templates : [],
   };
 
   return JSON.stringify(payload, null, 2);
 };
 
 const resetProject = () => {
-  modelState = { classes: [], relationships: [] };
+  modelState = { classes: [], relationships: [], templates: [] };
   nextId = 1;
   nextAttributeId = 1;
   currentFileName = "";
@@ -1526,7 +1679,9 @@ const applyOrderValue = (classModel, value) => {
 
 const createInstanceFromTemplate = (templateClass, options = {}) => {
   const attributes = templateClass.attributes.map((attribute) =>
-    cloneAttribute(attribute)
+    options.clearValues
+      ? cloneAttributeWithoutValue(attribute)
+      : cloneAttribute(attribute)
   );
   const instanceName =
     options.name || `${templateClass.name} Instance`;
@@ -1590,6 +1745,60 @@ const createCoreInstanceGraph = (templateClass) => {
       name: `${instance.name} — ${targetTemplate.name}`,
       position,
       instanceKind: "core",
+    });
+    createRelationship(instance.id, relatedInstance.id, relationship.type, {
+      generateOnInstantiate: false,
+      cardinalityHint: relationship.cardinalityHint,
+    });
+  });
+  return instance;
+};
+
+const createHalfCoreInstanceGraph = (templateClass) => {
+  const related = modelState.relationships.filter(
+    (relationship) => relationship.from === templateClass.id
+  );
+  const templates = [
+    templateClass,
+    ...related
+      .map((relationship) =>
+        modelState.classes.find((item) => item.id === relationship.to)
+      )
+      .filter(Boolean),
+  ];
+  const minTemplateX = templates.reduce(
+    (minX, item) => Math.min(minX, item.position.x),
+    Number.POSITIVE_INFINITY
+  );
+  const offsetX = getRightmostEdge() + 120 - minTemplateX;
+  const instance = createInstanceFromTemplate(templateClass, {
+    position: {
+      x: templateClass.position.x + offsetX,
+      y: templateClass.position.y,
+    },
+    instanceKind: "core",
+    clearValues: true,
+  });
+  if (!related.length) {
+    return instance;
+  }
+
+  related.forEach((relationship) => {
+    const targetTemplate = modelState.classes.find(
+      (item) => item.id === relationship.to
+    );
+    if (!targetTemplate) {
+      return;
+    }
+    const position = {
+      x: targetTemplate.position.x + offsetX,
+      y: targetTemplate.position.y,
+    };
+    const relatedInstance = createInstanceFromTemplate(targetTemplate, {
+      name: `${instance.name} — ${targetTemplate.name}`,
+      position,
+      instanceKind: "core",
+      clearValues: true,
     });
     createRelationship(instance.id, relatedInstance.id, relationship.type, {
       generateOnInstantiate: false,
@@ -1675,6 +1884,11 @@ const importJson = (jsonText, fileName = "") => {
     relationships: Array.isArray(payload.relationships)
       ? payload.relationships.map(normalizeRelationship)
       : [],
+    templates: Array.isArray(payload.templates)
+      ? payload.templates.filter((templateId) =>
+          payload.classes.some((entry) => entry.id === templateId)
+        )
+      : [],
   };
   currentFileName = fileName;
   activeClassId = null;
@@ -1699,6 +1913,8 @@ const handlePointerMove = (event) => {
       x: point.x - dragState.offsetX,
       y: point.y - dragState.offsetY,
     };
+    nextPosition.x = Math.max(-canvasOriginOffset, nextPosition.x);
+    nextPosition.y = Math.max(-canvasOriginOffset, nextPosition.y);
     if (isSnapEnabled) {
       nextPosition = snapPositionToGrid(nextPosition);
     }
@@ -1825,12 +2041,27 @@ createCoreInstanceButton.addEventListener("click", () => {
     (item) => item.id === activeClassId
   );
   if (!selectedTemplate || selectedTemplate.kind !== "template") {
-    setStatus("Select a template to create a core instance.");
+    setStatus("Select a template to create a core.");
     return;
   }
   const instance = createCoreInstanceGraph(selectedTemplate);
   setActiveClass(instance.id);
 });
+
+if (createHalfCoreButton) {
+  createHalfCoreButton.addEventListener("click", () => {
+    resetSelectionMode();
+    const selectedTemplate = modelState.classes.find(
+      (item) => item.id === activeClassId
+    );
+    if (!selectedTemplate || selectedTemplate.kind !== "template") {
+      setStatus("Select a template to create a half-core.");
+      return;
+    }
+    const instance = createHalfCoreInstanceGraph(selectedTemplate);
+    setActiveClass(instance.id);
+  });
+}
 
 openLegendButton.addEventListener("click", () => toggleModal(legendModal));
 openModelButton.addEventListener("click", () => {

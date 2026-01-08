@@ -3,14 +3,14 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Tengja</title>
+    <title>Vefa</title>
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
     <div class="app-layout">
       <aside class="sidebar">
         <div class="sidebar__brand">
-          <span class="sidebar__app-name">Tengja</span>
+          <span class="sidebar__app-name">Vefa</span>
         </div>
         <div class="sidebar__section">
           <button id="new-project">New project</button>
@@ -24,7 +24,8 @@
           <button id="add-class">Add Class</button>
           <button id="add-subclass">Add Subclass</button>
           <button id="create-instance">Create Instance</button>
-          <button id="create-core-instance">Create Core Instance</button>
+          <button id="create-core-instance">Create Core</button>
+          <button id="create-half-core">Create Half-Core</button>
         </div>
         <div class="sidebar__section">
           <p class="sidebar__label">Set relationship</p>
@@ -53,6 +54,13 @@
           </div>
         </div>
         <hr class="sidebar__divider" />
+        <div class="sidebar__section">
+          <p class="sidebar__label">Templates</p>
+          <div class="template-list" id="template-list"></div>
+          <p class="template-empty" id="template-empty">
+            Right-click a class to save it here.
+          </p>
+        </div>
         <div class="sidebar__section">
           <button id="open-legend">Legend</button>
         </div>
