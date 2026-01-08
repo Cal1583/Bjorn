@@ -38,11 +38,14 @@ let dragState = null;
 let selectionMode = null;
 let firstSelectionId = null;
 let nextId = 1;
+let nextAttributeId = 1;
 let activeModalDrag = null;
 let modalZIndex = 5;
 let relationshipType = "one-to-many";
 let currentFileName = "";
 let zoomLevel = 1;
+let pendingAttributeFocusId = null;
+let activePopover = null;
 
 const zoomSettings = {
   min: 0.5,
@@ -64,6 +67,24 @@ const relationshipLabels = {
 };
 
 const systemAttributes = ["id"];
+const attributeTypes = ["text", "number", "boolean", "enum", "list", "object"];
+const unitLibrary = [
+  "in/week",
+  "mm/week",
+  "L/week",
+  "gal/week",
+  "in",
+  "cm",
+  "ft",
+  "m",
+  "F",
+  "C",
+  "days",
+  "weeks",
+  "months",
+  "ppm",
+  "dS/m",
+];
 const getSchemaRelationshipColor = () =>
   getComputedStyle(document.documentElement)
     .getPropertyValue("--schema-relationship")
@@ -75,6 +96,141 @@ const getSchemaColor = (name) =>
 const isIdAttribute = (attributeName) => {
   const normalized = attributeName.trim().toLowerCase();
   return normalized === "id" || normalized.endsWith("id");
+};
+
+const generateAttributeId = () => `attr-${nextAttributeId++}`;
+
+const createAttribute = (name, options = {}) => ({
+  id: generateAttributeId(),
+  name: name || "unnamed_attribute",
+  type: options.type || "text",
+  unit: options.unit || "",
+});
+
+const cloneAttribute = (attribute) => ({
+  ...attribute,
+  id: generateAttributeId(),
+});
+
+const normalizeAttribute = (attribute) => {
+  if (typeof attribute === "string") {
+    return createAttribute(attribute);
+  }
+  if (attribute && typeof attribute === "object") {
+    return {
+      id: attribute.id || generateAttributeId(),
+      name: attribute.name || "unnamed_attribute",
+      type: attribute.type || "text",
+      unit: attribute.unit || "",
+    };
+  }
+  return null;
+};
+
+const focusContentEditableEnd = (element) => {
+  if (!element) {
+    return;
+  }
+  element.focus();
+  const range = document.createRange();
+  range.selectNodeContents(element);
+  range.collapse(false);
+  const selection = window.getSelection();
+  if (selection) {
+    selection.removeAllRanges();
+    selection.addRange(range);
+  }
+};
+
+const closeActivePopover = () => {
+  if (!activePopover) {
+    return;
+  }
+  activePopover.cleanup();
+  activePopover = null;
+};
+
+const positionPopover = (popover, anchor) => {
+  const rect = anchor.getBoundingClientRect();
+  popover.style.left = `${rect.left + window.scrollX}px`;
+  popover.style.top = `${rect.bottom + window.scrollY + 6}px`;
+};
+
+const openPopover = (anchor, contentBuilder) => {
+  closeActivePopover();
+  const popover = document.createElement("div");
+  popover.className = "attribute-popover";
+  popover.setAttribute("data-no-drag", "true");
+  contentBuilder(popover);
+  document.body.appendChild(popover);
+  positionPopover(popover, anchor);
+
+  const handlePointerDown = (event) => {
+    if (popover.contains(event.target) || event.target === anchor) {
+      return;
+    }
+    closeActivePopover();
+  };
+  const handleKeyDown = (event) => {
+    if (event.key === "Escape") {
+      closeActivePopover();
+    }
+  };
+  const handleResize = () => positionPopover(popover, anchor);
+
+  popover.addEventListener("pointerdown", (event) => event.stopPropagation());
+  document.addEventListener("pointerdown", handlePointerDown);
+  document.addEventListener("keydown", handleKeyDown);
+  window.addEventListener("resize", handleResize);
+
+  activePopover = {
+    cleanup: () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("resize", handleResize);
+      popover.remove();
+    },
+  };
+};
+
+const getProjectUnits = () => {
+  const units = new Set();
+  modelState.classes.forEach((classModel) => {
+    classModel.attributes.forEach((attribute) => {
+      if (attribute.unit) {
+        units.add(attribute.unit);
+      }
+    });
+  });
+  return units;
+};
+
+const getUnitSuggestions = (query) => {
+  const search = query.trim().toLowerCase();
+  const suggestions = new Set(unitLibrary);
+  getProjectUnits().forEach((unit) => suggestions.add(unit));
+  return Array.from(suggestions)
+    .filter((unit) => (search ? unit.toLowerCase().includes(search) : true))
+    .sort((a, b) => a.localeCompare(b));
+};
+
+const updateAttributeDraft = (classModel, attributeId, updates) => {
+  const target = classModel.attributes.find((item) => item.id === attributeId);
+  if (!target) {
+    return;
+  }
+  Object.assign(target, updates);
+};
+
+const mergeUniqueAttributesByName = (attributes) => {
+  const seen = new Map();
+  attributes.forEach((attribute) => {
+    const key = attribute.name.trim().toLowerCase();
+    if (!seen.has(key)) {
+      seen.set(key, attribute);
+    }
+  });
+  return Array.from(seen.values());
 };
 
 const setStatus = (message) => {
@@ -127,10 +283,15 @@ const getCanvasPoint = (event) => {
 
 const addClass = (position = { x: 120, y: 120 }, options = {}) => {
   const classId = `class-${nextId++}`;
+  const attributes = Array.isArray(options.attributes)
+    ? options.attributes
+        .map((attribute) => normalizeAttribute(attribute))
+        .filter(Boolean)
+    : [];
   const newClass = {
     id: classId,
     name: options.name || "Untitled",
-    attributes: options.attributes || [],
+    attributes,
     systemAttributes: options.systemAttributes || [...systemAttributes],
     inheritableAttributes: options.inheritableAttributes || [],
     position,
@@ -163,31 +324,37 @@ const addAttribute = (id) => {
   if (!target) {
     return;
   }
-  target.attributes.push("new_attribute");
+  const newAttribute = createAttribute("new_attribute");
+  target.attributes.push(newAttribute);
+  pendingAttributeFocusId = newAttribute.id;
   render();
 };
 
-const removeAttribute = (id, index) => {
+const removeAttribute = (id, attributeId) => {
   const target = modelState.classes.find((item) => item.id === id);
   if (!target) {
     return;
   }
-  const removedAttribute = target.attributes[index];
-  target.attributes.splice(index, 1);
-  if (removedAttribute && Array.isArray(target.inheritableAttributes)) {
+  const nextAttributes = target.attributes.filter(
+    (attribute) => attribute.id !== attributeId
+  );
+  const removedAttribute = target.attributes.find(
+    (attribute) => attribute.id === attributeId
+  );
+  target.attributes = nextAttributes;
+  if (removedAttribute?.id && Array.isArray(target.inheritableAttributes)) {
     target.inheritableAttributes = target.inheritableAttributes.filter(
-      (attribute) => attribute !== removedAttribute
+      (attribute) => attribute !== removedAttribute.id
     );
   }
   render();
 };
 
-const mergeUniqueAttributes = (attributes) =>
-  Array.from(new Set(attributes.filter(Boolean)));
-
 const getInheritedAttributes = (classModel) => {
   const inheritable = new Set(classModel.inheritableAttributes || []);
-  return classModel.attributes.filter((attribute) => inheritable.has(attribute));
+  return classModel.attributes
+    .filter((attribute) => inheritable.has(attribute.id))
+    .map((attribute) => cloneAttribute(attribute));
 };
 
 const createSubclass = (parentClass) => {
@@ -244,7 +411,10 @@ const handleSelection = (classId) => {
       ? getInheritedAttributes(parentClass)
       : [];
     const nextAttributes = childClass
-      ? mergeUniqueAttributes([...inheritedAttributes, ...childClass.attributes])
+      ? mergeUniqueAttributesByName([
+          ...inheritedAttributes,
+          ...childClass.attributes.map((attribute) => cloneAttribute(attribute)),
+        ])
       : inheritedAttributes;
     updateClass(
       classId,
@@ -313,6 +483,7 @@ const renderLines = () => {
 };
 
 const render = () => {
+  closeActivePopover();
   canvasContent.querySelectorAll(".class-node").forEach((node) => node.remove());
 
   modelState.classes.forEach((classModel) => {
@@ -401,15 +572,16 @@ const render = () => {
     const attributeList = document.createElement("ul");
     attributeList.className = "attributes";
 
-    classModel.attributes.forEach((attribute, index) => {
+    classModel.attributes.forEach((attribute) => {
       const attributeItem = document.createElement("li");
       attributeItem.className = "attribute";
-      if (isIdAttribute(attribute)) {
+      attributeItem.dataset.attributeId = attribute.id;
+      if (isIdAttribute(attribute.name)) {
         attributeItem.dataset.attributeType = "id";
       }
       if (
         Array.isArray(classModel.inheritableAttributes) &&
-        classModel.inheritableAttributes.includes(attribute)
+        classModel.inheritableAttributes.includes(attribute.id)
       ) {
         attributeItem.dataset.inherited = "true";
       }
@@ -419,7 +591,7 @@ const render = () => {
       inheritToggle.className = "attribute__toggle";
       inheritToggle.title = "Mark as inherited for new subclasses";
       inheritToggle.checked = Boolean(
-        classModel.inheritableAttributes?.includes(attribute)
+        classModel.inheritableAttributes?.includes(attribute.id)
       );
       inheritToggle.setAttribute("data-no-drag", "true");
       inheritToggle.addEventListener("pointerdown", (event) =>
@@ -429,10 +601,10 @@ const render = () => {
       inheritToggle.addEventListener("change", (event) => {
         const nextInheritable = new Set(classModel.inheritableAttributes || []);
         if (event.target.checked) {
-          nextInheritable.add(attribute);
+          nextInheritable.add(attribute.id);
           attributeItem.dataset.inherited = "true";
         } else {
-          nextInheritable.delete(attribute);
+          nextInheritable.delete(attribute.id);
           delete attributeItem.dataset.inherited;
         }
         updateClass(
@@ -447,7 +619,8 @@ const render = () => {
       attributeMarker.setAttribute("aria-hidden", "true");
 
       const attributeText = document.createElement("span");
-      attributeText.textContent = attribute;
+      attributeText.className = "attribute__name";
+      attributeText.textContent = attribute.name;
       attributeText.contentEditable = true;
       attributeText.setAttribute("data-no-drag", "true");
       attributeText.addEventListener("pointerdown", (event) =>
@@ -458,40 +631,145 @@ const render = () => {
       );
       attributeText.addEventListener("input", (event) => {
         const nextValue = event.target.textContent.trim() || "unnamed_attribute";
-        const nextAttributes = [...classModel.attributes];
-        nextAttributes[index] = nextValue;
-        const nextInheritable = [...(classModel.inheritableAttributes || [])];
-        const wasInheritable = nextInheritable.includes(attribute);
-        const updatedInheritable = wasInheritable
-          ? mergeUniqueAttributes(
-              nextInheritable
-                .filter((entry) => entry !== attribute)
-                .concat(nextValue)
-            )
-          : nextInheritable;
+        updateAttributeDraft(classModel, attribute.id, { name: nextValue });
         if (isIdAttribute(nextValue)) {
           attributeItem.dataset.attributeType = "id";
         } else {
           delete attributeItem.dataset.attributeType;
         }
-        updateClass(
-          classModel.id,
-          { attributes: nextAttributes, inheritableAttributes: updatedInheritable },
-          { silent: true }
-        );
+      });
+      attributeText.addEventListener("blur", (event) => {
+        const nextValue = event.target.textContent.trim() || "unnamed_attribute";
+        updateAttributeDraft(classModel, attribute.id, { name: nextValue });
+        if (event.target.textContent.trim() === "") {
+          event.target.textContent = nextValue;
+        }
+      });
+
+      const typePill = document.createElement("button");
+      typePill.type = "button";
+      typePill.className = "attribute__pill attribute__pill--type";
+      typePill.textContent = attribute.type || "text";
+      typePill.setAttribute("data-no-drag", "true");
+      typePill.addEventListener("pointerdown", (event) =>
+        event.stopPropagation()
+      );
+      typePill.addEventListener("click", (event) => {
+        event.stopPropagation();
+        openPopover(typePill, (popover) => {
+          const list = document.createElement("div");
+          list.className = "attribute-popover__list";
+          attributeTypes.forEach((type) => {
+            const option = document.createElement("button");
+            option.type = "button";
+            option.className = "attribute-popover__option";
+            option.textContent = type;
+            option.addEventListener("click", () => {
+              updateAttributeDraft(classModel, attribute.id, { type });
+              typePill.textContent = type;
+              closeActivePopover();
+            });
+            list.appendChild(option);
+          });
+
+          const hint = document.createElement("div");
+          hint.className = "attribute-popover__hint";
+          hint.textContent = "Advanced: enum values (coming soon)";
+
+          popover.appendChild(list);
+          popover.appendChild(hint);
+        });
+      });
+
+      const unitPill = document.createElement("button");
+      unitPill.type = "button";
+      unitPill.className = "attribute__pill attribute__pill--unit";
+      unitPill.textContent = attribute.unit || "unit";
+      if (!attribute.unit) {
+        unitPill.classList.add("is-placeholder");
+      }
+      unitPill.setAttribute("data-no-drag", "true");
+      unitPill.addEventListener("pointerdown", (event) =>
+        event.stopPropagation()
+      );
+      unitPill.addEventListener("click", (event) => {
+        event.stopPropagation();
+        openPopover(unitPill, (popover) => {
+          const input = document.createElement("input");
+          input.type = "text";
+          input.placeholder = "Search or add unit";
+          input.className = "attribute-popover__input";
+          input.value = attribute.unit;
+          input.addEventListener("pointerdown", (innerEvent) =>
+            innerEvent.stopPropagation()
+          );
+
+          const list = document.createElement("div");
+          list.className = "attribute-popover__list";
+
+          const renderSuggestions = () => {
+            list.innerHTML = "";
+            const suggestions = getUnitSuggestions(input.value);
+            if (!suggestions.length) {
+              const empty = document.createElement("div");
+              empty.className = "attribute-popover__empty";
+              empty.textContent = "No matches. Press Enter to add.";
+              list.appendChild(empty);
+              return;
+            }
+            suggestions.forEach((unit) => {
+              const option = document.createElement("button");
+              option.type = "button";
+              option.className = "attribute-popover__option";
+              option.textContent = unit;
+              option.addEventListener("click", () => {
+                updateAttributeDraft(classModel, attribute.id, { unit });
+                unitPill.textContent = unit;
+                unitPill.classList.remove("is-placeholder");
+                closeActivePopover();
+              });
+              list.appendChild(option);
+            });
+          };
+
+          input.addEventListener("input", () => renderSuggestions());
+          input.addEventListener("keydown", (innerEvent) => {
+            if (innerEvent.key === "Enter") {
+              innerEvent.preventDefault();
+              const nextUnit = input.value.trim();
+              updateAttributeDraft(classModel, attribute.id, { unit: nextUnit });
+              if (nextUnit) {
+                unitPill.textContent = nextUnit;
+                unitPill.classList.remove("is-placeholder");
+              } else {
+                unitPill.textContent = "unit";
+                unitPill.classList.add("is-placeholder");
+              }
+              closeActivePopover();
+            }
+          });
+
+          popover.appendChild(input);
+          popover.appendChild(list);
+          renderSuggestions();
+          input.focus();
+        });
       });
 
       const deleteButton = document.createElement("button");
       deleteButton.type = "button";
+      deleteButton.className = "attribute__delete";
       deleteButton.textContent = "✕";
       deleteButton.addEventListener("click", (event) => {
         event.stopPropagation();
-        removeAttribute(classModel.id, index);
+        removeAttribute(classModel.id, attribute.id);
       });
 
       attributeItem.appendChild(attributeMarker);
       attributeItem.appendChild(inheritToggle);
       attributeItem.appendChild(attributeText);
+      attributeItem.appendChild(typePill);
+      attributeItem.appendChild(unitPill);
       attributeItem.appendChild(deleteButton);
       attributeList.appendChild(attributeItem);
     });
@@ -572,6 +850,14 @@ const render = () => {
   });
 
   renderLines();
+
+  if (pendingAttributeFocusId) {
+    const target = document.querySelector(
+      `[data-attribute-id="${pendingAttributeFocusId}"] .attribute__name`
+    );
+    focusContentEditableEnd(target);
+    pendingAttributeFocusId = null;
+  }
 };
 
 const setModalPosition = (modal, position) => {
@@ -679,13 +965,17 @@ const exportJson = () => {
     classes: modelState.classes.map((item) => ({
       id: item.id,
       name: item.name,
-      attributes: [
-        ...(item.systemAttributes || systemAttributes),
-        ...item.attributes,
-      ],
+      attributes: item.attributes.map((attribute) => ({
+        id: attribute.id,
+        name: attribute.name,
+        type: attribute.type,
+        unit: attribute.unit,
+      })),
+      systemAttributes: item.systemAttributes || systemAttributes,
       extends: item.extends,
       position: item.position,
       inheritableAttributes: item.inheritableAttributes || [],
+      collapsed: item.collapsed,
     })),
     relationships: modelState.relationships,
   };
@@ -696,6 +986,7 @@ const exportJson = () => {
 const resetProject = () => {
   modelState = { classes: [], relationships: [] };
   nextId = 1;
+  nextAttributeId = 1;
   currentFileName = "";
   resetSelectionMode();
   render();
@@ -710,27 +1001,53 @@ const updateNextId = () => {
     return maxValue;
   }, 0);
   nextId = maxId + 1;
+  const maxAttributeId = modelState.classes.reduce((maxValue, item) => {
+    item.attributes.forEach((attribute) => {
+      const match = String(attribute.id || "").match(/attr-(\d+)/);
+      if (match) {
+        maxValue = Math.max(maxValue, Number(match[1]));
+      }
+    });
+    return maxValue;
+  }, 0);
+  nextAttributeId = maxAttributeId + 1;
 };
 
 const normalizeClass = (rawClass) => {
-  const attributes = Array.isArray(rawClass.attributes) ? rawClass.attributes : [];
-  const inheritableAttributes = Array.isArray(rawClass.inheritableAttributes)
-    ? rawClass.inheritableAttributes.filter((attribute) =>
-        attributes.includes(attribute)
-      )
+  const rawAttributes = Array.isArray(rawClass.attributes)
+    ? rawClass.attributes
     : [];
-  const normalizedSystem = new Set(systemAttributes);
+  const normalizedSystem = new Set(
+    Array.isArray(rawClass.systemAttributes)
+      ? rawClass.systemAttributes
+      : systemAttributes
+  );
   const userAttributes = [];
-  attributes.forEach((attribute) => {
-    if (typeof attribute !== "string") {
+  rawAttributes.forEach((attribute) => {
+    const normalized = normalizeAttribute(attribute);
+    if (!normalized) {
       return;
     }
-    if (systemAttributes.includes(attribute)) {
-      normalizedSystem.add(attribute);
-    } else {
-      userAttributes.push(attribute);
+    if (systemAttributes.includes(normalized.name)) {
+      normalizedSystem.add(normalized.name);
+      return;
     }
+    userAttributes.push(normalized);
   });
+
+  const inheritableAttributes = Array.isArray(rawClass.inheritableAttributes)
+    ? rawClass.inheritableAttributes
+        .map((entry) => {
+          if (userAttributes.some((attribute) => attribute.id === entry)) {
+            return entry;
+          }
+          const match = userAttributes.find(
+            (attribute) => attribute.name === entry
+          );
+          return match ? match.id : null;
+        })
+        .filter(Boolean)
+    : [];
 
   return {
     id: rawClass.id,
