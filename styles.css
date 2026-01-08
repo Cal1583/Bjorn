@@ -293,6 +293,25 @@ body {
   background: transparent;
 }
 
+.attribute__value {
+  min-width: 3.5rem;
+  outline: none;
+  cursor: text;
+  padding: 0.1rem 0.4rem;
+  border-radius: 999px;
+  border: 1px dashed #cbd3ea;
+  background: #ffffff;
+  font-size: 0.75rem;
+  color: #3b4256;
+  white-space: nowrap;
+}
+
+.attribute__value:empty::before {
+  content: attr(data-placeholder);
+  color: #7a829e;
+  font-style: italic;
+}
+
 .attribute__pill {
   border: 1px solid #cbd3ea;
   background: #f0f3ff;
