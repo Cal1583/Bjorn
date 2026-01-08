@@ -17,6 +17,7 @@ const classCancelButton = document.getElementById("class-cancel");
 const addClassButton = document.getElementById("add-class");
 const addSubclassButton = document.getElementById("add-subclass");
 const createInstanceButton = document.getElementById("create-instance");
+const createCoreInstanceButton = document.getElementById("create-core-instance");
 const openLegendButton = document.getElementById("open-legend");
 const openModelButton = document.getElementById("open-model");
 const openColorsButton = document.getElementById("open-colors");
@@ -1247,6 +1248,40 @@ const createInstanceFromTemplate = (templateClass, options = {}) => {
   });
 };
 
+const createCoreInstanceGraph = (templateClass) => {
+  const instance = createInstanceFromTemplate(templateClass);
+  const related = modelState.relationships.filter(
+    (relationship) => relationship.from === templateClass.id
+  );
+  if (!related.length) {
+    return instance;
+  }
+
+  const radius = 220;
+  related.forEach((relationship, index) => {
+    const targetTemplate = modelState.classes.find(
+      (item) => item.id === relationship.to
+    );
+    if (!targetTemplate) {
+      return;
+    }
+    const angle = (Math.PI * 2 * index) / Math.max(related.length, 1);
+    const position = {
+      x: instance.position.x + Math.cos(angle) * radius,
+      y: instance.position.y + Math.sin(angle) * radius,
+    };
+    const relatedInstance = createInstanceFromTemplate(targetTemplate, {
+      name: `${instance.name} — ${targetTemplate.name}`,
+      position,
+    });
+    createRelationship(instance.id, relatedInstance.id, relationship.type, {
+      generateOnInstantiate: false,
+      cardinalityHint: relationship.cardinalityHint,
+    });
+  });
+  return instance;
+};
+
 const scaffoldRelationshipsForInstance = (templateClass, instanceClass) => {
   const scaffolds = modelState.relationships.filter(
     (relationship) =>
@@ -1409,6 +1444,19 @@ createInstanceButton.addEventListener("click", () => {
   selectionMode = "instance";
   firstSelectionId = null;
   setStatus("Select a template to create an instance.");
+});
+
+createCoreInstanceButton.addEventListener("click", () => {
+  resetSelectionMode();
+  const selectedTemplate = modelState.classes.find(
+    (item) => item.id === activeClassId
+  );
+  if (!selectedTemplate || selectedTemplate.kind !== "template") {
+    setStatus("Select a template to create a core instance.");
+    return;
+  }
+  const instance = createCoreInstanceGraph(selectedTemplate);
+  setActiveClass(instance.id);
 });
 
 openLegendButton.addEventListener("click", () => toggleModal(legendModal));
