@@ -64,6 +64,44 @@
       </aside>
 
       <main class="canvas" id="canvas">
+        <div class="mini-toolbar">
+          <div class="mini-toolbar__section mini-toolbar__section--search">
+            <label class="mini-toolbar__label" for="search-input">Find</label>
+            <input
+              id="search-input"
+              type="search"
+              placeholder="Search classes..."
+              autocomplete="off"
+            />
+          </div>
+          <div class="mini-toolbar__section mini-toolbar__section--actions">
+            <button id="undo-action" type="button">Undo</button>
+            <button id="redo-action" type="button">Redo</button>
+          </div>
+          <div class="mini-toolbar__section mini-toolbar__section--view">
+            <button
+              id="view-options-toggle"
+              type="button"
+              aria-expanded="false"
+              aria-controls="view-options"
+            >
+              View options
+            </button>
+            <div class="view-options" id="view-options" hidden>
+              <span class="mini-toolbar__label">View</span>
+              <div class="view-options__buttons">
+                <button id="fit-to-screen" type="button">Fit to screen</button>
+                <button id="grid-toggle" type="button" aria-pressed="false">
+                  Grid toggle
+                </button>
+                <button id="snap-toggle" type="button" aria-pressed="false">
+                  Snap toggle
+                </button>
+                <button id="view-definitions" type="button">Definitions</button>
+              </div>
+            </div>
+          </div>
+        </div>
         <div class="canvas__content" id="canvas-content">
           <svg class="canvas__lines" id="relationship-lines"></svg>
         </div>
