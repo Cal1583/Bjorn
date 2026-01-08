@@ -16,6 +16,7 @@ const classCancelButton = document.getElementById("class-cancel");
 
 const addClassButton = document.getElementById("add-class");
 const addSubclassButton = document.getElementById("add-subclass");
+const createInstanceButton = document.getElementById("create-instance");
 const openLegendButton = document.getElementById("open-legend");
 const openModelButton = document.getElementById("open-model");
 const openColorsButton = document.getElementById("open-colors");
@@ -46,6 +47,7 @@ let currentFileName = "";
 let zoomLevel = 1;
 let pendingAttributeFocusId = null;
 let activePopover = null;
+let activeClassId = null;
 
 const zoomSettings = {
   min: 0.5,
@@ -258,6 +260,24 @@ const setRelationshipType = (type) => {
     );
 };
 
+const setActiveClass = (classId) => {
+  activeClassId = classId;
+  document.querySelectorAll(".class-node").forEach((node) => {
+    if (node.dataset.classId === classId) {
+      node.setAttribute("data-active", "true");
+    } else {
+      node.removeAttribute("data-active");
+    }
+  });
+};
+
+const clearActiveClass = () => {
+  activeClassId = null;
+  document.querySelectorAll(".class-node").forEach((node) => {
+    node.removeAttribute("data-active");
+  });
+};
+
 const setZoomLevel = (value) => {
   const clamped = Math.min(zoomSettings.max, Math.max(zoomSettings.min, value));
   zoomLevel = Number(clamped.toFixed(2));
@@ -296,6 +316,8 @@ const addClass = (position = { x: 120, y: 120 }, options = {}) => {
     position,
     collapsed: false,
     extends: options.extends || null,
+    kind: options.kind === "instance" ? "instance" : "template",
+    templateId: options.templateId || null,
   };
   modelState.classes.push(newClass);
   render();
@@ -371,18 +393,34 @@ const createSubclass = (parentClass) => {
   createRelationship(parentClass.id, newClass.id, "inherits");
 };
 
-const createRelationship = (fromId, toId, type) => {
+const createRelationship = (fromId, toId, type, options = {}) => {
   modelState.relationships.push({
     id: `rel-${Date.now()}-${Math.random().toString(16).slice(2)}`,
     from: fromId,
     to: toId,
     type,
+    generateOnInstantiate: Boolean(options.generateOnInstantiate),
+    cardinalityHint:
+      options.cardinalityHint === "many" ? "many" : "one",
   });
   render();
 };
 
 const handleSelection = (classId) => {
   if (!selectionMode) {
+    return;
+  }
+
+  if (selectionMode === "instance") {
+    const templateClass = modelState.classes.find((item) => item.id === classId);
+    if (!templateClass || templateClass.kind !== "template") {
+      setStatus("Select a template class to create an instance.");
+      return;
+    }
+    const instance = createInstanceFromTemplate(templateClass);
+    scaffoldRelationshipsForInstance(templateClass, instance);
+    setActiveClass(instance.id);
+    resetSelectionMode();
     return;
   }
 
@@ -437,6 +475,77 @@ const markSelected = (classId, selected) => {
   }
 };
 
+const updateRelationship = (relationshipId, updates) => {
+  const target = modelState.relationships.find(
+    (relationship) => relationship.id === relationshipId
+  );
+  if (!target) {
+    return;
+  }
+  Object.assign(target, updates);
+};
+
+const openRelationshipPopover = (anchor, relationship) => {
+  openPopover(anchor, (popover) => {
+    popover.classList.add("relationship-popover");
+
+    const header = document.createElement("p");
+    header.className = "relationship-popover__title";
+    header.textContent = "Scaffold on instantiate";
+
+    const scaffoldRow = document.createElement("label");
+    scaffoldRow.className = "relationship-popover__row";
+    const scaffoldInput = document.createElement("input");
+    scaffoldInput.type = "checkbox";
+    scaffoldInput.checked = Boolean(relationship.generateOnInstantiate);
+    scaffoldInput.setAttribute("data-no-drag", "true");
+    scaffoldInput.addEventListener("pointerdown", (event) =>
+      event.stopPropagation()
+    );
+    scaffoldInput.addEventListener("change", (event) => {
+      updateRelationship(relationship.id, {
+        generateOnInstantiate: event.target.checked,
+      });
+    });
+    const scaffoldText = document.createElement("span");
+    scaffoldText.textContent = "Auto-generate on Create Instance";
+    scaffoldRow.appendChild(scaffoldInput);
+    scaffoldRow.appendChild(scaffoldText);
+
+    const cardinalityRow = document.createElement("label");
+    cardinalityRow.className = "relationship-popover__row";
+    const cardinalityLabel = document.createElement("span");
+    cardinalityLabel.textContent = "Cardinality";
+    const cardinalitySelect = document.createElement("select");
+    cardinalitySelect.className = "relationship-popover__select";
+    cardinalitySelect.setAttribute("data-no-drag", "true");
+    const optionOne = document.createElement("option");
+    optionOne.value = "one";
+    optionOne.textContent = "One";
+    const optionMany = document.createElement("option");
+    optionMany.value = "many";
+    optionMany.textContent = "Many";
+    cardinalitySelect.appendChild(optionOne);
+    cardinalitySelect.appendChild(optionMany);
+    cardinalitySelect.value =
+      relationship.cardinalityHint === "many" ? "many" : "one";
+    cardinalitySelect.addEventListener("pointerdown", (event) =>
+      event.stopPropagation()
+    );
+    cardinalitySelect.addEventListener("change", (event) => {
+      updateRelationship(relationship.id, {
+        cardinalityHint: event.target.value === "many" ? "many" : "one",
+      });
+    });
+    cardinalityRow.appendChild(cardinalityLabel);
+    cardinalityRow.appendChild(cardinalitySelect);
+
+    popover.appendChild(header);
+    popover.appendChild(scaffoldRow);
+    popover.appendChild(cardinalityRow);
+  });
+};
+
 const renderLines = () => {
   linesSvg.innerHTML = "";
 
@@ -467,6 +576,15 @@ const renderLines = () => {
     line.setAttribute("stroke", getSchemaRelationshipColor());
     line.setAttribute("stroke-width", "2");
     line.setAttribute("stroke-linecap", "round");
+    line.dataset.relationshipId = relationship.id;
+    line.addEventListener("pointerdown", (event) => event.stopPropagation());
+    line.addEventListener("click", (event) => {
+      event.stopPropagation();
+      if (selectionMode) {
+        return;
+      }
+      openRelationshipPopover(line, relationship);
+    });
     linesSvg.appendChild(line);
 
     const label = document.createElementNS(
@@ -477,6 +595,14 @@ const renderLines = () => {
     label.setAttribute("y", (y1 + y2) / 2 - 6);
     label.setAttribute("class", "relationship-label");
     label.textContent = relationshipLabels[relationship.type] || relationship.type;
+    label.addEventListener("pointerdown", (event) => event.stopPropagation());
+    label.addEventListener("click", (event) => {
+      event.stopPropagation();
+      if (selectionMode) {
+        return;
+      }
+      openRelationshipPopover(label, relationship);
+    });
     linesSvg.appendChild(label);
   });
 };
@@ -488,12 +614,18 @@ const render = () => {
   modelState.classes.forEach((classModel) => {
     const node = document.createElement("section");
     node.className = `class-node${classModel.collapsed ? " collapsed" : ""}`;
+    if (classModel.kind === "instance") {
+      node.classList.add("class-node--instance");
+    }
     if (dragState && dragState.id === classModel.id) {
       node.classList.add("is-dragging");
     }
     node.style.left = `${classModel.position.x}px`;
     node.style.top = `${classModel.position.y}px`;
     node.dataset.classId = classModel.id;
+    if (activeClassId === classModel.id) {
+      node.dataset.active = "true";
+    }
 
     const header = document.createElement("div");
     header.className = "class-node__header";
@@ -543,6 +675,9 @@ const render = () => {
       modelState.relationships = modelState.relationships.filter(
         (rel) => rel.from !== classModel.id && rel.to !== classModel.id
       );
+      if (activeClassId === classModel.id) {
+        clearActiveClass();
+      }
       render();
     });
 
@@ -551,13 +686,27 @@ const render = () => {
 
     titleWrap.appendChild(typeDot);
     titleWrap.appendChild(title);
+    if (classModel.kind === "instance") {
+      const badge = document.createElement("span");
+      badge.className = "class-node__badge";
+      badge.textContent = "Instance";
+      badge.setAttribute("aria-label", "Instance node");
+      titleWrap.appendChild(badge);
+    }
 
     header.appendChild(titleWrap);
     header.appendChild(actions);
 
     const meta = document.createElement("div");
     meta.className = "class-node__meta";
-    if (classModel.extends) {
+    if (classModel.kind === "instance" && classModel.templateId) {
+      const template = modelState.classes.find(
+        (item) => item.id === classModel.templateId
+      );
+      meta.textContent = template
+        ? `Instance of ${template.name}`
+        : "Instance of (missing)";
+    } else if (classModel.extends) {
       const parent = modelState.classes.find(
         (item) => item.id === classModel.extends
       );
@@ -829,6 +978,10 @@ const render = () => {
       if (isNoDragTarget(event) || event.target.closest("button")) {
         return;
       }
+      if (!selectionMode) {
+        setActiveClass(classModel.id);
+        return;
+      }
       handleSelection(classModel.id);
     });
 
@@ -959,6 +1112,8 @@ const exportJson = () => {
       })),
       systemAttributes: item.systemAttributes || systemAttributes,
       extends: item.extends,
+      kind: item.kind || "template",
+      templateId: item.templateId || null,
       position: item.position,
       inheritableAttributes: item.inheritableAttributes || [],
       collapsed: item.collapsed,
@@ -974,6 +1129,7 @@ const resetProject = () => {
   nextId = 1;
   nextAttributeId = 1;
   currentFileName = "";
+  activeClassId = null;
   resetSelectionMode();
   render();
 };
@@ -1044,7 +1200,101 @@ const normalizeClass = (rawClass) => {
     position: rawClass.position || { x: 120, y: 120 },
     collapsed: Boolean(rawClass.collapsed),
     extends: rawClass.extends || null,
+    kind: rawClass.kind === "instance" ? "instance" : "template",
+    templateId: rawClass.templateId || null,
   };
+};
+
+const normalizeRelationship = (relationship) => ({
+  id:
+    relationship.id ||
+    `rel-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+  from: relationship.from,
+  to: relationship.to,
+  type: relationship.type,
+  generateOnInstantiate: Boolean(relationship.generateOnInstantiate),
+  cardinalityHint:
+    relationship.cardinalityHint === "many" ? "many" : "one",
+});
+
+const applyOrderValue = (classModel, value) => {
+  const target = classModel.attributes.find(
+    (attribute) => attribute.name.trim().toLowerCase() === "order"
+  );
+  if (target) {
+    target.value = String(value);
+  }
+};
+
+const createInstanceFromTemplate = (templateClass, options = {}) => {
+  const attributes = templateClass.attributes.map((attribute) =>
+    cloneAttribute(attribute)
+  );
+  const instanceName =
+    options.name || `${templateClass.name} Instance`;
+  const position =
+    options.position || {
+      x: templateClass.position.x + 60,
+      y: templateClass.position.y + 60,
+    };
+  return addClass(position, {
+    name: instanceName,
+    attributes,
+    systemAttributes: templateClass.systemAttributes || systemAttributes,
+    inheritableAttributes: [],
+    kind: "instance",
+    templateId: templateClass.id,
+  });
+};
+
+const scaffoldRelationshipsForInstance = (templateClass, instanceClass) => {
+  const scaffolds = modelState.relationships.filter(
+    (relationship) =>
+      relationship.from === templateClass.id &&
+      relationship.generateOnInstantiate
+  );
+  if (!scaffolds.length) {
+    return;
+  }
+  const totalInstances = scaffolds.reduce((count, relationship) => {
+    return (
+      count + (relationship.cardinalityHint === "many" ? 3 : 1)
+    );
+  }, 0);
+  let instanceIndex = 0;
+  const radius = 220;
+
+  scaffolds.forEach((relationship) => {
+    const targetTemplate = modelState.classes.find(
+      (item) => item.id === relationship.to
+    );
+    if (!targetTemplate) {
+      return;
+    }
+    const count = relationship.cardinalityHint === "many" ? 3 : 1;
+    for (let i = 0; i < count; i += 1) {
+      const angle =
+        (Math.PI * 2 * instanceIndex) / Math.max(totalInstances, 1);
+      const position = {
+        x: instanceClass.position.x + Math.cos(angle) * radius,
+        y: instanceClass.position.y + Math.sin(angle) * radius,
+      };
+      const baseName = `${instanceClass.name} — ${targetTemplate.name}`;
+      const relatedName = count > 1 ? `${baseName} ${i + 1}` : baseName;
+      const relatedInstance = createInstanceFromTemplate(targetTemplate, {
+        name: relatedName,
+        position,
+      });
+      if (count > 1) {
+        applyOrderValue(relatedInstance, i + 1);
+      }
+      createRelationship(instanceClass.id, relatedInstance.id, relationship.type, {
+        generateOnInstantiate: false,
+        cardinalityHint: relationship.cardinalityHint,
+      });
+      instanceIndex += 1;
+    }
+  });
 };
 
 const importJson = (jsonText, fileName = "") => {
@@ -1064,10 +1314,11 @@ const importJson = (jsonText, fileName = "") => {
   modelState = {
     classes: payload.classes.map(normalizeClass),
     relationships: Array.isArray(payload.relationships)
-      ? payload.relationships
+      ? payload.relationships.map(normalizeRelationship)
       : [],
   };
   currentFileName = fileName;
+  activeClassId = null;
   updateNextId();
   resetSelectionMode();
   closeModal(modelModal);
@@ -1142,6 +1393,22 @@ addSubclassButton.addEventListener("click", () => {
   firstSelectionId = null;
   setStatus("Select the parent class, then the subclass.");
   canvas.classList.add("canvas--linking");
+});
+
+createInstanceButton.addEventListener("click", () => {
+  resetSelectionMode();
+  const selectedTemplate = modelState.classes.find(
+    (item) => item.id === activeClassId
+  );
+  if (selectedTemplate && selectedTemplate.kind === "template") {
+    const instance = createInstanceFromTemplate(selectedTemplate);
+    scaffoldRelationshipsForInstance(selectedTemplate, instance);
+    setActiveClass(instance.id);
+    return;
+  }
+  selectionMode = "instance";
+  firstSelectionId = null;
+  setStatus("Select a template to create an instance.");
 });
 
 openLegendButton.addEventListener("click", () => toggleModal(legendModal));
@@ -1267,6 +1534,16 @@ canvas.addEventListener("wheel", (event) => {
   event.preventDefault();
   const direction = event.deltaY > 0 ? -1 : 1;
   adjustZoom(direction);
+});
+
+canvas.addEventListener("click", (event) => {
+  if (selectionMode) {
+    return;
+  }
+  if (event.target.closest(".class-node")) {
+    return;
+  }
+  clearActiveClass();
 });
 
 window.addEventListener("resize", renderLines);
