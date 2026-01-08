@@ -9,6 +9,9 @@
   <body>
     <div class="app-layout">
       <aside class="sidebar">
+        <div class="sidebar__brand">
+          <span class="sidebar__app-name">Tengja</span>
+        </div>
         <div class="sidebar__section">
           <button id="new-project">New project</button>
           <button id="open-project">Open...</button>
@@ -49,16 +52,9 @@
             </button>
           </div>
         </div>
+        <hr class="sidebar__divider" />
         <div class="sidebar__section">
           <button id="open-legend">Legend</button>
-        </div>
-        <div class="sidebar__section">
-          <p class="sidebar__label">Zoom</p>
-          <div class="zoom-controls">
-            <button id="zoom-out" type="button">−</button>
-            <button id="zoom-reset" type="button">100%</button>
-            <button id="zoom-in" type="button">+</button>
-          </div>
         </div>
         <div class="sidebar__status" id="status"></div>
       </aside>
@@ -78,6 +74,7 @@
         </div>
         <div class="view-toolbar">
           <div class="mini-toolbar__section mini-toolbar__section--view">
+            <span class="view-toolbar__zoom" id="zoom-display">100%</span>
             <button
               id="view-options-toggle"
               type="button"
@@ -97,6 +94,13 @@
                   Snap toggle
                 </button>
                 <button id="view-definitions" type="button">Definitions</button>
+                <button
+                  id="theme-toggle"
+                  type="button"
+                  aria-pressed="false"
+                >
+                  Dark mode
+                </button>
               </div>
             </div>
           </div>
@@ -161,6 +165,30 @@
             <span>Class</span>
             <input name="class" type="text" placeholder="#3f9aae" />
             <span class="colors-form__swatch" data-color-preview="class"></span>
+          </label>
+          <label class="colors-form__row">
+            <span>Subclass</span>
+            <input name="subclass" type="text" placeholder="#5d76d3" />
+            <span
+              class="colors-form__swatch"
+              data-color-preview="subclass"
+            ></span>
+          </label>
+          <label class="colors-form__row">
+            <span>Instance</span>
+            <input name="instance" type="text" placeholder="#6c7dd6" />
+            <span
+              class="colors-form__swatch"
+              data-color-preview="instance"
+            ></span>
+          </label>
+          <label class="colors-form__row">
+            <span>Core instance</span>
+            <input name="core-instance" type="text" placeholder="#8f6bd9" />
+            <span
+              class="colors-form__swatch"
+              data-color-preview="core-instance"
+            ></span>
           </label>
           <label class="colors-form__row">
             <span>Attribute</span>
