@@ -179,6 +179,19 @@ body {
   box-shadow: 0 0 0 3px rgba(93, 118, 211, 0.2);
 }
 
+.class-node[data-active="true"] {
+  border-color: #6c7dd6;
+  box-shadow: 0 0 0 2px rgba(108, 125, 214, 0.15);
+}
+
+.class-node--instance {
+  border-top-color: #6c7dd6;
+}
+
+.class-node--instance .class-node__title {
+  background: #e6ebff;
+}
+
 .class-node__header {
   display: flex;
   align-items: center;
@@ -211,8 +224,21 @@ body {
   color: #1f2430;
   border-radius: 6px;
   padding: 0.2rem 0.4rem;
-  width: 100%;
+  flex: 1;
+  min-width: 0;
   cursor: text;
+}
+
+.class-node__badge {
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 0.2rem 0.4rem;
+  border-radius: 999px;
+  background: #eef1fb;
+  color: #3b4256;
+  white-space: nowrap;
 }
 
 .class-node__meta {
@@ -392,6 +418,36 @@ body {
 .attribute-popover__hint {
   font-size: 0.75rem;
   color: #7a829e;
+}
+
+.relationship-popover__title {
+  margin: 0;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #3b4256;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.relationship-popover__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-size: 0.8rem;
+  color: #3b4256;
+}
+
+.relationship-popover__row input {
+  margin: 0;
+}
+
+.relationship-popover__select {
+  border-radius: 6px;
+  border: 1px solid #cbd3ea;
+  padding: 0.2rem 0.4rem;
+  font-size: 0.8rem;
+  background: #ffffff;
 }
 
 .add-attribute {
