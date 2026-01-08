@@ -75,6 +75,8 @@ const zoomSettings = {
 
 const gridSize = 20;
 const classNodeWidthEstimate = 260;
+const canvasDefaultSize = { width: 2400, height: 1800 };
+const canvasPadding = 200;
 
 const historyState = {
   undoStack: [],
@@ -873,6 +875,36 @@ const renderLines = () => {
   });
 };
 
+const updateCanvasBounds = () => {
+  const nodes = Array.from(canvasContent.querySelectorAll(".class-node"));
+  if (!nodes.length) {
+    canvasContent.style.width = `${canvasDefaultSize.width}px`;
+    canvasContent.style.height = `${canvasDefaultSize.height}px`;
+    return;
+  }
+  const bounds = nodes.reduce(
+    (acc, node) => {
+      acc.maxRight = Math.max(acc.maxRight, node.offsetLeft + node.offsetWidth);
+      acc.maxBottom = Math.max(
+        acc.maxBottom,
+        node.offsetTop + node.offsetHeight
+      );
+      return acc;
+    },
+    { maxRight: 0, maxBottom: 0 }
+  );
+  const nextWidth = Math.max(
+    canvasDefaultSize.width,
+    bounds.maxRight + canvasPadding
+  );
+  const nextHeight = Math.max(
+    canvasDefaultSize.height,
+    bounds.maxBottom + canvasPadding
+  );
+  canvasContent.style.width = `${nextWidth}px`;
+  canvasContent.style.height = `${nextHeight}px`;
+};
+
 const render = () => {
   closeActivePopover();
   canvasContent.querySelectorAll(".class-node").forEach((node) => node.remove());
@@ -1241,6 +1273,7 @@ const render = () => {
     canvasContent.appendChild(node);
   });
 
+  updateCanvasBounds();
   renderLines();
   updateSearchHighlights();
 
