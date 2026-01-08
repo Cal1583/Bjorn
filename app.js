@@ -46,6 +46,7 @@ let modelState = {
 };
 
 let dragState = null;
+let panState = null;
 let selectionMode = null;
 let firstSelectionId = null;
 let nextId = 1;
@@ -553,6 +554,11 @@ const updateClass = (id, updates, options = {}) => {
 const isNoDragTarget = (event) =>
   event.target.closest(
     'input, textarea, [contenteditable="true"], [data-no-drag="true"]'
+  );
+
+const isCanvasPanTarget = (event) =>
+  !event.target.closest(
+    ".class-node, .mini-toolbar, .view-toolbar, .sidebar, .modal"
   );
 
 const addAttribute = (id) => {
@@ -1181,38 +1187,10 @@ const render = () => {
         offsetX: point.x - classModel.position.x,
         offsetY: point.y - classModel.position.y,
         hasRecorded: false,
+        pointerId: event.pointerId,
       };
       node.classList.add("is-dragging");
       node.setPointerCapture(event.pointerId);
-    });
-
-    node.addEventListener("pointermove", (event) => {
-      if (!dragState || dragState.id !== classModel.id) {
-        return;
-      }
-      if (!dragState.hasRecorded) {
-        recordHistory();
-        dragState.hasRecorded = true;
-      }
-      const point = getCanvasPoint(event);
-      let nextPosition = {
-        x: point.x - dragState.offsetX,
-        y: point.y - dragState.offsetY,
-      };
-      if (isSnapEnabled) {
-        nextPosition = snapPositionToGrid(nextPosition);
-      }
-      updateClass(classModel.id, { position: nextPosition }, { recordHistory: false });
-    });
-
-    node.addEventListener("pointerup", () => {
-      node.classList.remove("is-dragging");
-      dragState = null;
-    });
-
-    node.addEventListener("pointercancel", () => {
-      node.classList.remove("is-dragging");
-      dragState = null;
     });
 
     node.addEventListener("click", (event) => {
@@ -1614,6 +1592,46 @@ const importJson = (jsonText, fileName = "") => {
   setStatus(fileName ? `Opened ${fileName}.` : "Project loaded.");
 };
 
+const handlePointerMove = (event) => {
+  if (dragState && dragState.pointerId === event.pointerId) {
+    if (!dragState.hasRecorded) {
+      recordHistory();
+      dragState.hasRecorded = true;
+    }
+    const point = getCanvasPoint(event);
+    let nextPosition = {
+      x: point.x - dragState.offsetX,
+      y: point.y - dragState.offsetY,
+    };
+    if (isSnapEnabled) {
+      nextPosition = snapPositionToGrid(nextPosition);
+    }
+    updateClass(dragState.id, { position: nextPosition }, { recordHistory: false });
+    return;
+  }
+
+  if (panState && panState.pointerId === event.pointerId) {
+    const deltaX = event.clientX - panState.startX;
+    const deltaY = event.clientY - panState.startY;
+    canvas.scrollLeft = panState.scrollLeft - deltaX;
+    canvas.scrollTop = panState.scrollTop - deltaY;
+  }
+};
+
+const handlePointerUp = (event) => {
+  if (dragState && dragState.pointerId === event.pointerId) {
+    const node = document.querySelector(`[data-class-id="${dragState.id}"]`);
+    if (node) {
+      node.classList.remove("is-dragging");
+    }
+    dragState = null;
+  }
+
+  if (panState && panState.pointerId === event.pointerId) {
+    panState = null;
+  }
+};
+
 const downloadJson = (fileName, jsonText) => {
   const blob = new Blob([jsonText], { type: "application/json" });
   const url = URL.createObjectURL(blob);
@@ -1889,11 +1907,25 @@ classCancelButton.addEventListener("click", () => {
   closeModal(classModal);
 });
 
-canvas.addEventListener("scroll", renderLines);
-canvas.addEventListener("wheel", (event) => {
-  if (!event.ctrlKey) {
+canvas.addEventListener("pointerdown", (event) => {
+  if (!isCanvasPanTarget(event) || isNoDragTarget(event)) {
     return;
   }
+  if (event.button !== 0) {
+    return;
+  }
+  panState = {
+    startX: event.clientX,
+    startY: event.clientY,
+    scrollLeft: canvas.scrollLeft,
+    scrollTop: canvas.scrollTop,
+    pointerId: event.pointerId,
+  };
+  canvas.setPointerCapture(event.pointerId);
+});
+
+canvas.addEventListener("scroll", renderLines);
+canvas.addEventListener("wheel", (event) => {
   event.preventDefault();
   const direction = event.deltaY > 0 ? -1 : 1;
   adjustZoom(direction);
@@ -1910,5 +1942,8 @@ canvas.addEventListener("click", (event) => {
 });
 
 window.addEventListener("resize", renderLines);
+document.addEventListener("pointermove", handlePointerMove);
+document.addEventListener("pointerup", handlePointerUp);
+document.addEventListener("pointercancel", handlePointerUp);
 
 initialize();

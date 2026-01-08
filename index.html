@@ -65,19 +65,18 @@
 
       <main class="canvas" id="canvas">
         <div class="mini-toolbar">
-          <div class="mini-toolbar__section mini-toolbar__section--search">
-            <label class="mini-toolbar__label" for="search-input">Find</label>
+          <div class="mini-toolbar__section mini-toolbar__section--primary">
             <input
               id="search-input"
               type="search"
               placeholder="Search classes..."
               autocomplete="off"
             />
-          </div>
-          <div class="mini-toolbar__section mini-toolbar__section--actions">
             <button id="undo-action" type="button">Undo</button>
             <button id="redo-action" type="button">Redo</button>
           </div>
+        </div>
+        <div class="view-toolbar">
           <div class="mini-toolbar__section mini-toolbar__section--view">
             <button
               id="view-options-toggle"
