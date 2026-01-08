@@ -126,11 +126,123 @@ body {
   background: var(--schema-relationship);
 }
 
+.mini-toolbar {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+  z-index: 4;
+}
+
+.mini-toolbar__section {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid #d6dcec;
+  border-radius: 12px;
+  padding: 0.5rem 0.65rem;
+  box-shadow: 0 10px 24px rgba(31, 36, 48, 0.1);
+  backdrop-filter: blur(6px);
+}
+
+.mini-toolbar__section--search {
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.mini-toolbar__section--actions button,
+.mini-toolbar__section--view button {
+  padding: 0.4rem 0.6rem;
+  border-radius: 8px;
+  border: 1px solid #c8d1e3;
+  background: #f8f9ff;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.mini-toolbar__section--actions button:disabled,
+.mini-toolbar__section--view button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.mini-toolbar__section--actions button.is-active,
+.mini-toolbar__section--view button.is-active {
+  border-color: #5d76d3;
+  background: #e6ebff;
+  color: #263a84;
+}
+
+.mini-toolbar__label {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #5b6482;
+  font-weight: 600;
+}
+
+.mini-toolbar input[type="search"] {
+  border-radius: 8px;
+  border: 1px solid #c8d1e3;
+  padding: 0.4rem 0.6rem;
+  min-width: 200px;
+  font-size: 0.85rem;
+}
+
+.mini-toolbar__section--view {
+  position: relative;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.view-options {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 0.35rem;
+}
+
+.view-options__buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
 .canvas {
   position: relative;
   flex: 1;
   overflow: auto;
   background: linear-gradient(180deg, #f8f9ff 0%, #eef1f8 100%);
+}
+
+.canvas::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: repeating-linear-gradient(
+      0deg,
+      rgba(31, 36, 48, 0.08) 0,
+      rgba(31, 36, 48, 0.08) 1px,
+      transparent 1px,
+      transparent 20px
+    ),
+    repeating-linear-gradient(
+      90deg,
+      rgba(31, 36, 48, 0.08) 0,
+      rgba(31, 36, 48, 0.08) 1px,
+      transparent 1px,
+      transparent 20px
+    );
+  opacity: 0;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.canvas.canvas--grid::before {
+  opacity: 0.45;
 }
 
 .canvas--linking {
@@ -182,6 +294,11 @@ body {
 .class-node[data-active="true"] {
   border-color: #6c7dd6;
   box-shadow: 0 0 0 2px rgba(108, 125, 214, 0.15);
+}
+
+.class-node.class-node--match {
+  border-color: #f6a23c;
+  box-shadow: 0 0 0 3px rgba(246, 162, 60, 0.25);
 }
 
 .class-node--instance {

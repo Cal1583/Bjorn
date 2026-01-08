@@ -29,6 +29,15 @@ const openProjectButton = document.getElementById("open-project");
 const saveProjectButton = document.getElementById("save-project");
 const saveProjectAsButton = document.getElementById("save-project-as");
 const openProjectInput = document.getElementById("open-project-input");
+const searchInput = document.getElementById("search-input");
+const undoButton = document.getElementById("undo-action");
+const redoButton = document.getElementById("redo-action");
+const viewOptionsToggle = document.getElementById("view-options-toggle");
+const viewOptionsPanel = document.getElementById("view-options");
+const fitToScreenButton = document.getElementById("fit-to-screen");
+const gridToggleButton = document.getElementById("grid-toggle");
+const snapToggleButton = document.getElementById("snap-toggle");
+const viewDefinitionsButton = document.getElementById("view-definitions");
 
 let modelState = {
   classes: [],
@@ -48,11 +57,22 @@ let zoomLevel = 1;
 let pendingAttributeFocusId = null;
 let activePopover = null;
 let activeClassId = null;
+let searchQuery = "";
+let isGridVisible = false;
+let isSnapEnabled = false;
+let isViewOptionsOpen = false;
 
 const zoomSettings = {
   min: 0.5,
   max: 2,
   step: 0.1,
+};
+
+const gridSize = 20;
+
+const historyState = {
+  undoStack: [],
+  redoStack: [],
 };
 
 const modalDefaults = {
@@ -140,6 +160,135 @@ const focusContentEditableEnd = (element) => {
   if (selection) {
     selection.removeAllRanges();
     selection.addRange(range);
+  }
+};
+
+const deepClone = (value) => JSON.parse(JSON.stringify(value));
+
+const captureSnapshot = () => ({
+  modelState: deepClone(modelState),
+  nextId,
+  nextAttributeId,
+  activeClassId,
+});
+
+const restoreSnapshot = (snapshot) => {
+  modelState = deepClone(snapshot.modelState);
+  nextId = snapshot.nextId;
+  nextAttributeId = snapshot.nextAttributeId;
+  activeClassId = snapshot.activeClassId || null;
+  render();
+};
+
+const updateHistoryButtons = () => {
+  if (undoButton) {
+    undoButton.disabled = historyState.undoStack.length === 0;
+  }
+  if (redoButton) {
+    redoButton.disabled = historyState.redoStack.length === 0;
+  }
+};
+
+const recordHistory = () => {
+  historyState.undoStack.push(captureSnapshot());
+  historyState.redoStack = [];
+  updateHistoryButtons();
+};
+
+const resetHistory = () => {
+  historyState.undoStack = [];
+  historyState.redoStack = [];
+  updateHistoryButtons();
+};
+
+const undo = () => {
+  if (!historyState.undoStack.length) {
+    return;
+  }
+  historyState.redoStack.push(captureSnapshot());
+  const snapshot = historyState.undoStack.pop();
+  if (snapshot) {
+    restoreSnapshot(snapshot);
+  }
+  updateHistoryButtons();
+};
+
+const redo = () => {
+  if (!historyState.redoStack.length) {
+    return;
+  }
+  historyState.undoStack.push(captureSnapshot());
+  const snapshot = historyState.redoStack.pop();
+  if (snapshot) {
+    restoreSnapshot(snapshot);
+  }
+  updateHistoryButtons();
+};
+
+const normalizeSearchValue = (value) => value.trim().toLowerCase();
+
+const classMatchesSearch = (classModel, query) => {
+  if (!query) {
+    return false;
+  }
+  const tokens = [
+    classModel.name,
+    classModel.kind,
+    classModel.extends,
+    ...(classModel.attributes || []).flatMap((attribute) => [
+      attribute.name,
+      attribute.value,
+      attribute.unit,
+    ]),
+  ]
+    .filter(Boolean)
+    .map((value) => String(value).toLowerCase());
+  return tokens.some((token) => token.includes(query));
+};
+
+const updateSearchHighlights = () => {
+  const normalized = normalizeSearchValue(searchQuery);
+  const classMap = new Map(
+    modelState.classes.map((classModel) => [classModel.id, classModel])
+  );
+  document.querySelectorAll(".class-node").forEach((node) => {
+    const classModel = classMap.get(node.dataset.classId);
+    if (!normalized || !classModel) {
+      node.classList.remove("class-node--match");
+      return;
+    }
+    if (classMatchesSearch(classModel, normalized)) {
+      node.classList.add("class-node--match");
+    } else {
+      node.classList.remove("class-node--match");
+    }
+  });
+};
+
+const setViewOptionsOpen = (open) => {
+  isViewOptionsOpen = open;
+  if (viewOptionsPanel) {
+    viewOptionsPanel.hidden = !open;
+  }
+  if (viewOptionsToggle) {
+    viewOptionsToggle.setAttribute("aria-expanded", String(open));
+  }
+};
+
+const setGridVisibility = (visible) => {
+  isGridVisible = visible;
+  canvas.classList.toggle("canvas--grid", isGridVisible);
+  if (gridToggleButton) {
+    gridToggleButton.classList.toggle("is-active", isGridVisible);
+    gridToggleButton.setAttribute("aria-pressed", String(isGridVisible));
+  }
+};
+
+const setSnapEnabled = (enabled) => {
+  isSnapEnabled = enabled;
+  if (snapToggleButton) {
+    snapToggleButton.classList.toggle("is-active", isSnapEnabled);
+    snapToggleButton.setAttribute("aria-pressed", String(isSnapEnabled));
   }
 };
 
@@ -293,6 +442,11 @@ const adjustZoom = (direction) => {
   setZoomLevel(zoomLevel + delta);
 };
 
+const snapPositionToGrid = (position) => ({
+  x: Math.round(position.x / gridSize) * gridSize,
+  y: Math.round(position.y / gridSize) * gridSize,
+});
+
 const getCanvasPoint = (event) => {
   const rect = canvasContent.getBoundingClientRect();
   const x = (event.clientX - rect.left) / zoomLevel;
@@ -300,7 +454,64 @@ const getCanvasPoint = (event) => {
   return { x, y };
 };
 
+const fitToScreen = () => {
+  const nodes = Array.from(document.querySelectorAll(".class-node"));
+  if (!nodes.length) {
+    return;
+  }
+  const bounds = nodes.reduce(
+    (acc, node) => {
+      const minX = Math.min(acc.minX, node.offsetLeft);
+      const minY = Math.min(acc.minY, node.offsetTop);
+      const maxX = Math.max(acc.maxX, node.offsetLeft + node.offsetWidth);
+      const maxY = Math.max(acc.maxY, node.offsetTop + node.offsetHeight);
+      return { minX, minY, maxX, maxY };
+    },
+    {
+      minX: Number.POSITIVE_INFINITY,
+      minY: Number.POSITIVE_INFINITY,
+      maxX: Number.NEGATIVE_INFINITY,
+      maxY: Number.NEGATIVE_INFINITY,
+    }
+  );
+  const contentWidth = bounds.maxX - bounds.minX;
+  const contentHeight = bounds.maxY - bounds.minY;
+  if (contentWidth <= 0 || contentHeight <= 0) {
+    return;
+  }
+  const padding = 80;
+  const availableWidth = canvas.clientWidth - padding * 2;
+  const availableHeight = canvas.clientHeight - padding * 2;
+  if (availableWidth <= 0 || availableHeight <= 0) {
+    return;
+  }
+  const nextZoom = Math.min(
+    zoomSettings.max,
+    Math.max(
+      zoomSettings.min,
+      Math.min(availableWidth / contentWidth, availableHeight / contentHeight)
+    )
+  );
+  setZoomLevel(nextZoom);
+
+  const centerX = bounds.minX + contentWidth / 2;
+  const centerY = bounds.minY + contentHeight / 2;
+  const nextScrollLeft = Math.max(
+    0,
+    centerX - canvas.clientWidth / (2 * zoomLevel)
+  );
+  const nextScrollTop = Math.max(
+    0,
+    centerY - canvas.clientHeight / (2 * zoomLevel)
+  );
+  canvas.scrollLeft = nextScrollLeft;
+  canvas.scrollTop = nextScrollTop;
+};
+
 const addClass = (position = { x: 120, y: 120 }, options = {}) => {
+  if (options.recordHistory !== false) {
+    recordHistory();
+  }
   const classId = `class-${nextId++}`;
   const attributes = Array.isArray(options.attributes)
     ? options.attributes
@@ -329,6 +540,9 @@ const updateClass = (id, updates, options = {}) => {
   if (!target) {
     return;
   }
+  if (options.recordHistory !== false) {
+    recordHistory();
+  }
   Object.assign(target, updates);
   if (!options.silent) {
     render();
@@ -345,6 +559,7 @@ const addAttribute = (id) => {
   if (!target) {
     return;
   }
+  recordHistory();
   const newAttribute = createAttribute("new_attribute");
   target.attributes.push(newAttribute);
   pendingAttributeFocusId = newAttribute.id;
@@ -356,6 +571,7 @@ const removeAttribute = (id, attributeId) => {
   if (!target) {
     return;
   }
+  recordHistory();
   const nextAttributes = target.attributes.filter(
     (attribute) => attribute.id !== attributeId
   );
@@ -382,18 +598,26 @@ const createSubclass = (parentClass) => {
   if (!parentClass) {
     return;
   }
+  recordHistory();
   const inheritedAttributes = getInheritedAttributes(parentClass);
   const newClass = addClass(
     { x: parentClass.position.x + 40, y: parentClass.position.y + 140 },
     {
       attributes: inheritedAttributes,
       extends: parentClass.id,
+      recordHistory: false,
     }
   );
-  createRelationship(parentClass.id, newClass.id, "inherits");
+  createRelationship(parentClass.id, newClass.id, "inherits", {
+    recordHistory: false,
+  });
 };
 
 const createRelationship = (fromId, toId, type, options = {}) => {
+  const { recordHistory: shouldRecord = true } = options;
+  if (shouldRecord) {
+    recordHistory();
+  }
   modelState.relationships.push({
     id: `rel-${Date.now()}-${Math.random().toString(16).slice(2)}`,
     from: fromId,
@@ -412,12 +636,15 @@ const handleSelection = (classId) => {
   }
 
   if (selectionMode === "instance") {
+    recordHistory();
     const templateClass = modelState.classes.find((item) => item.id === classId);
     if (!templateClass || templateClass.kind !== "template") {
       setStatus("Select a template class to create an instance.");
       return;
     }
-    const instance = createInstanceFromTemplate(templateClass);
+    const instance = createInstanceFromTemplate(templateClass, {
+      recordHistory: false,
+    });
     scaffoldRelationshipsForInstance(templateClass, instance);
     setActiveClass(instance.id);
     resetSelectionMode();
@@ -440,6 +667,7 @@ const handleSelection = (classId) => {
   }
 
   if (selectionMode === "subclass") {
+    recordHistory();
     const parentClass = modelState.classes.find(
       (item) => item.id === firstSelectionId
     );
@@ -456,9 +684,11 @@ const handleSelection = (classId) => {
     updateClass(
       classId,
       { extends: firstSelectionId, attributes: nextAttributes },
-      { silent: true }
+      { silent: true, recordHistory: false }
     );
-    createRelationship(firstSelectionId, classId, "inherits");
+    createRelationship(firstSelectionId, classId, "inherits", {
+      recordHistory: false,
+    });
   }
 
   resetSelectionMode();
@@ -482,6 +712,7 @@ const updateRelationship = (relationshipId, updates) => {
   if (!target) {
     return;
   }
+  recordHistory();
   Object.assign(target, updates);
 };
 
@@ -669,6 +900,7 @@ const render = () => {
     removeButton.textContent = "Delete";
     removeButton.addEventListener("click", (event) => {
       event.stopPropagation();
+      recordHistory();
       modelState.classes = modelState.classes.filter(
         (item) => item.id !== classModel.id
       );
@@ -947,6 +1179,7 @@ const render = () => {
         id: classModel.id,
         offsetX: point.x - classModel.position.x,
         offsetY: point.y - classModel.position.y,
+        hasRecorded: false,
       };
       node.classList.add("is-dragging");
       node.setPointerCapture(event.pointerId);
@@ -956,12 +1189,19 @@ const render = () => {
       if (!dragState || dragState.id !== classModel.id) {
         return;
       }
+      if (!dragState.hasRecorded) {
+        recordHistory();
+        dragState.hasRecorded = true;
+      }
       const point = getCanvasPoint(event);
-      const nextPosition = {
+      let nextPosition = {
         x: point.x - dragState.offsetX,
         y: point.y - dragState.offsetY,
       };
-      updateClass(classModel.id, { position: nextPosition });
+      if (isSnapEnabled) {
+        nextPosition = snapPositionToGrid(nextPosition);
+      }
+      updateClass(classModel.id, { position: nextPosition }, { recordHistory: false });
     });
 
     node.addEventListener("pointerup", () => {
@@ -989,6 +1229,7 @@ const render = () => {
   });
 
   renderLines();
+  updateSearchHighlights();
 
   if (pendingAttributeFocusId) {
     const target = document.querySelector(
@@ -1131,6 +1372,7 @@ const resetProject = () => {
   currentFileName = "";
   activeClassId = null;
   resetSelectionMode();
+  resetHistory();
   render();
 };
 
@@ -1244,6 +1486,7 @@ const createInstanceFromTemplate = (templateClass, options = {}) => {
     inheritableAttributes: [],
     kind: "instance",
     templateId: templateClass.id,
+    recordHistory: options.recordHistory,
   });
 };
 
@@ -1284,14 +1527,21 @@ const scaffoldRelationshipsForInstance = (templateClass, instanceClass) => {
       const relatedInstance = createInstanceFromTemplate(targetTemplate, {
         name: relatedName,
         position,
+        recordHistory: false,
       });
       if (count > 1) {
         applyOrderValue(relatedInstance, i + 1);
       }
-      createRelationship(instanceClass.id, relatedInstance.id, relationship.type, {
-        generateOnInstantiate: false,
-        cardinalityHint: relationship.cardinalityHint,
-      });
+      createRelationship(
+        instanceClass.id,
+        relatedInstance.id,
+        relationship.type,
+        {
+          generateOnInstantiate: false,
+          cardinalityHint: relationship.cardinalityHint,
+          recordHistory: false,
+        }
+      );
       instanceIndex += 1;
     }
   });
@@ -1324,6 +1574,7 @@ const importJson = (jsonText, fileName = "") => {
   closeModal(modelModal);
   closeModal(legendModal);
   closeModal(colorsModal);
+  resetHistory();
   render();
   setStatus(fileName ? `Opened ${fileName}.` : "Project loaded.");
 };
@@ -1379,6 +1630,10 @@ const initialize = () => {
   });
   setRelationshipType(relationshipType);
   setZoomLevel(1);
+  setGridVisibility(false);
+  setSnapEnabled(false);
+  setViewOptionsOpen(false);
+  resetHistory();
 };
 
 addClassButton.addEventListener("click", () => {
@@ -1401,7 +1656,10 @@ createInstanceButton.addEventListener("click", () => {
     (item) => item.id === activeClassId
   );
   if (selectedTemplate && selectedTemplate.kind === "template") {
-    const instance = createInstanceFromTemplate(selectedTemplate);
+    recordHistory();
+    const instance = createInstanceFromTemplate(selectedTemplate, {
+      recordHistory: false,
+    });
     scaffoldRelationshipsForInstance(selectedTemplate, instance);
     setActiveClass(instance.id);
     return;
@@ -1442,6 +1700,63 @@ newProjectButton.addEventListener("click", () => {
 zoomInButton.addEventListener("click", () => adjustZoom(1));
 zoomOutButton.addEventListener("click", () => adjustZoom(-1));
 zoomResetButton.addEventListener("click", () => setZoomLevel(1));
+
+if (searchInput) {
+  searchInput.addEventListener("input", (event) => {
+    searchQuery = event.target.value;
+    updateSearchHighlights();
+  });
+}
+
+if (undoButton) {
+  undoButton.addEventListener("click", () => undo());
+}
+
+if (redoButton) {
+  redoButton.addEventListener("click", () => redo());
+}
+
+if (viewOptionsToggle) {
+  viewOptionsToggle.addEventListener("click", (event) => {
+    event.stopPropagation();
+    setViewOptionsOpen(!isViewOptionsOpen);
+  });
+}
+
+if (fitToScreenButton) {
+  fitToScreenButton.addEventListener("click", () => fitToScreen());
+}
+
+if (gridToggleButton) {
+  gridToggleButton.addEventListener("click", () =>
+    setGridVisibility(!isGridVisible)
+  );
+}
+
+if (snapToggleButton) {
+  snapToggleButton.addEventListener("click", () =>
+    setSnapEnabled(!isSnapEnabled)
+  );
+}
+
+if (viewDefinitionsButton) {
+  viewDefinitionsButton.addEventListener("click", () =>
+    toggleModal(legendModal)
+  );
+}
+
+document.addEventListener("pointerdown", (event) => {
+  if (!isViewOptionsOpen) {
+    return;
+  }
+  if (
+    (viewOptionsPanel && viewOptionsPanel.contains(event.target)) ||
+    (viewOptionsToggle && viewOptionsToggle.contains(event.target))
+  ) {
+    return;
+  }
+  setViewOptionsOpen(false);
+});
 
 if (openProjectInput) {
   openProjectInput.addEventListener("change", (event) => {
