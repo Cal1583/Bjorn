@@ -67,7 +67,6 @@ const relationshipLabels = {
 };
 
 const systemAttributes = ["id"];
-const attributeTypes = ["text", "number", "boolean", "enum", "list", "object"];
 const unitLibrary = [
   "in/week",
   "mm/week",
@@ -103,7 +102,7 @@ const generateAttributeId = () => `attr-${nextAttributeId++}`;
 const createAttribute = (name, options = {}) => ({
   id: generateAttributeId(),
   name: name || "unnamed_attribute",
-  type: options.type || "text",
+  value: options.value || "",
   unit: options.unit || "",
 });
 
@@ -120,7 +119,7 @@ const normalizeAttribute = (attribute) => {
     return {
       id: attribute.id || generateAttributeId(),
       name: attribute.name || "unnamed_attribute",
-      type: attribute.type || "text",
+      value: attribute.value || "",
       unit: attribute.unit || "",
     };
   }
@@ -646,39 +645,26 @@ const render = () => {
         }
       });
 
-      const typePill = document.createElement("button");
-      typePill.type = "button";
-      typePill.className = "attribute__pill attribute__pill--type";
-      typePill.textContent = attribute.type || "text";
-      typePill.setAttribute("data-no-drag", "true");
-      typePill.addEventListener("pointerdown", (event) =>
+      const valueText = document.createElement("span");
+      valueText.className = "attribute__value";
+      valueText.textContent = attribute.value || "";
+      valueText.contentEditable = true;
+      valueText.setAttribute("data-no-drag", "true");
+      valueText.setAttribute("data-placeholder", "value");
+      valueText.addEventListener("pointerdown", (event) =>
         event.stopPropagation()
       );
-      typePill.addEventListener("click", (event) => {
-        event.stopPropagation();
-        openPopover(typePill, (popover) => {
-          const list = document.createElement("div");
-          list.className = "attribute-popover__list";
-          attributeTypes.forEach((type) => {
-            const option = document.createElement("button");
-            option.type = "button";
-            option.className = "attribute-popover__option";
-            option.textContent = type;
-            option.addEventListener("click", () => {
-              updateAttributeDraft(classModel, attribute.id, { type });
-              typePill.textContent = type;
-              closeActivePopover();
-            });
-            list.appendChild(option);
-          });
-
-          const hint = document.createElement("div");
-          hint.className = "attribute-popover__hint";
-          hint.textContent = "Advanced: enum values (coming soon)";
-
-          popover.appendChild(list);
-          popover.appendChild(hint);
-        });
+      valueText.addEventListener("click", (event) => event.stopPropagation());
+      valueText.addEventListener("input", (event) => {
+        const nextValue = event.target.textContent.trim();
+        updateAttributeDraft(classModel, attribute.id, { value: nextValue });
+      });
+      valueText.addEventListener("blur", (event) => {
+        const nextValue = event.target.textContent.trim();
+        updateAttributeDraft(classModel, attribute.id, { value: nextValue });
+        if (event.target.textContent.trim() === "") {
+          event.target.textContent = "";
+        }
       });
 
       const unitPill = document.createElement("button");
@@ -768,7 +754,7 @@ const render = () => {
       attributeItem.appendChild(attributeMarker);
       attributeItem.appendChild(inheritToggle);
       attributeItem.appendChild(attributeText);
-      attributeItem.appendChild(typePill);
+      attributeItem.appendChild(valueText);
       attributeItem.appendChild(unitPill);
       attributeItem.appendChild(deleteButton);
       attributeList.appendChild(attributeItem);
@@ -968,7 +954,7 @@ const exportJson = () => {
       attributes: item.attributes.map((attribute) => ({
         id: attribute.id,
         name: attribute.name,
-        type: attribute.type,
+        value: attribute.value,
         unit: attribute.unit,
       })),
       systemAttributes: item.systemAttributes || systemAttributes,
