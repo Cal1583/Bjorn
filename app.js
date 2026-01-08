@@ -73,7 +73,7 @@ let isDarkMode = false;
 let activeTemplateMenu = null;
 
 const zoomSettings = {
-  min: 0.5,
+  min: 0.1,
   max: 2,
   step: 0.1,
 };
