@@ -71,6 +71,9 @@ let isSnapEnabled = false;
 let isViewOptionsOpen = false;
 let isDarkMode = false;
 let activeTemplateMenu = null;
+let activeRelationshipId = null;
+let multiGrabState = null;
+let lastPointerPosition = null;
 
 const zoomSettings = {
   min: 0.1,
@@ -318,6 +321,7 @@ const closeActivePopover = () => {
   }
   activePopover.cleanup();
   activePopover = null;
+  setActiveRelationship(null);
 };
 
 const positionPopover = (popover, anchor) => {
@@ -379,6 +383,16 @@ const openTemplateMenu = (position, classModel) => {
   menu.style.top = `${position.y}px`;
   menu.setAttribute("data-no-drag", "true");
 
+  const hasChildren = getChildRelationshipIds(classModel.id).length > 0;
+  const collapseButton = document.createElement("button");
+  collapseButton.type = "button";
+  collapseButton.textContent = "Collapse children to the right";
+  collapseButton.disabled = !hasChildren;
+  collapseButton.addEventListener("click", () => {
+    organizeChildRelationships(classModel);
+    closeTemplateMenu();
+  });
+
   const addButton = document.createElement("button");
   addButton.type = "button";
   addButton.textContent = "Save to templates";
@@ -387,6 +401,7 @@ const openTemplateMenu = (position, classModel) => {
     closeTemplateMenu();
   });
 
+  menu.appendChild(collapseButton);
   menu.appendChild(addButton);
   document.body.appendChild(menu);
 
@@ -529,6 +544,92 @@ const resetSelectionMode = () => {
     .forEach((node) => node.removeAttribute("data-selected"));
 };
 
+const clearMultiGrabSelection = () => {
+  document
+    .querySelectorAll(".class-node--multi-selected")
+    .forEach((node) => node.classList.remove("class-node--multi-selected"));
+};
+
+const setActiveRelationship = (relationshipId) => {
+  activeRelationshipId = relationshipId;
+  document
+    .querySelectorAll("[data-relationship-id]")
+    .forEach((element) => {
+      if (element.dataset.relationshipId === relationshipId) {
+        element.classList.add("is-active");
+      } else {
+        element.classList.remove("is-active");
+      }
+    });
+};
+
+const updateMultiGrabBox = () => {
+  if (!multiGrabState) {
+    return;
+  }
+  const { start, current, box } = multiGrabState;
+  const left = Math.min(start.x, current.x) + canvasOriginOffset;
+  const top = Math.min(start.y, current.y) + canvasOriginOffset;
+  const width = Math.abs(start.x - current.x);
+  const height = Math.abs(start.y - current.y);
+  box.style.left = `${left}px`;
+  box.style.top = `${top}px`;
+  box.style.width = `${width}px`;
+  box.style.height = `${height}px`;
+};
+
+const exitMultiGrab = () => {
+  if (!multiGrabState) {
+    return;
+  }
+  multiGrabState.box.remove();
+  multiGrabState = null;
+  canvas.classList.remove("canvas--multi-grab");
+};
+
+const startMultiGrab = (startPoint) => {
+  if (multiGrabState) {
+    return;
+  }
+  resetSelectionMode();
+  const box = document.createElement("div");
+  box.className = "multi-grab-box";
+  canvasContent.appendChild(box);
+  multiGrabState = {
+    start: startPoint,
+    current: startPoint,
+    box,
+  };
+  canvas.classList.add("canvas--multi-grab");
+  updateMultiGrabBox();
+};
+
+const selectMultiGrabNodes = () => {
+  if (!multiGrabState) {
+    return;
+  }
+  const { start, current } = multiGrabState;
+  const left = Math.min(start.x, current.x) + canvasOriginOffset;
+  const top = Math.min(start.y, current.y) + canvasOriginOffset;
+  const right = left + Math.abs(start.x - current.x);
+  const bottom = top + Math.abs(start.y - current.y);
+  clearMultiGrabSelection();
+  document.querySelectorAll(".class-node").forEach((node) => {
+    const nodeLeft = node.offsetLeft;
+    const nodeTop = node.offsetTop;
+    const nodeRight = nodeLeft + node.offsetWidth;
+    const nodeBottom = nodeTop + node.offsetHeight;
+    const intersects =
+      nodeRight >= left &&
+      nodeLeft <= right &&
+      nodeBottom >= top &&
+      nodeTop <= bottom;
+    if (intersects) {
+      node.classList.add("class-node--multi-selected");
+    }
+  });
+};
+
 const setRelationshipType = (type) => {
   relationshipType = type;
   if (!relationshipButtons) {
@@ -586,6 +687,13 @@ const getCanvasPoint = (event) => {
   const rect = canvasContent.getBoundingClientRect();
   const x = (event.clientX - rect.left) / zoomLevel - canvasOriginOffset;
   const y = (event.clientY - rect.top) / zoomLevel - canvasOriginOffset;
+  return { x, y };
+};
+
+const getCanvasPointFromClient = (clientX, clientY) => {
+  const rect = canvasContent.getBoundingClientRect();
+  const x = (clientX - rect.left) / zoomLevel - canvasOriginOffset;
+  const y = (clientY - rect.top) / zoomLevel - canvasOriginOffset;
   return { x, y };
 };
 
@@ -710,6 +818,9 @@ const isNoDragTarget = (event) =>
     'input, textarea, [contenteditable="true"], [data-no-drag="true"]'
   );
 
+const isTextInputTarget = (event) =>
+  event.target.closest('input, textarea, [contenteditable="true"]');
+
 const isCanvasPanTarget = (event) =>
   !event.target.closest(
     ".class-node, .mini-toolbar, .view-toolbar, .sidebar, .modal"
@@ -787,6 +898,62 @@ const createRelationship = (fromId, toId, type, options = {}) => {
     generateOnInstantiate: Boolean(options.generateOnInstantiate),
     cardinalityHint:
       options.cardinalityHint === "many" ? "many" : "one",
+  });
+  render();
+};
+
+const getChildRelationshipIds = (parentId) =>
+  modelState.relationships
+    .filter(
+      (relationship) =>
+        relationship.from === parentId &&
+        (relationship.type === "parent-child" ||
+          relationship.type === "inherits")
+    )
+    .map((relationship) => relationship.to);
+
+const organizeChildRelationships = (parentClass) => {
+  if (!parentClass) {
+    return;
+  }
+  const levels = new Map();
+  const visited = new Set([parentClass.id]);
+  const queue = [{ id: parentClass.id, depth: 0 }];
+  while (queue.length) {
+    const { id, depth } = queue.shift();
+    const children = getChildRelationshipIds(id);
+    children.forEach((childId) => {
+      if (visited.has(childId)) {
+        return;
+      }
+      visited.add(childId);
+      const nextDepth = depth + 1;
+      if (!levels.has(nextDepth)) {
+        levels.set(nextDepth, []);
+      }
+      levels.get(nextDepth).push(childId);
+      queue.push({ id: childId, depth: nextDepth });
+    });
+  }
+
+  if (!levels.size) {
+    return;
+  }
+  recordHistory();
+  const spacingX = classNodeWidthEstimate + 80;
+  const spacingY = 140;
+  levels.forEach((childIds, depth) => {
+    const childModels = childIds
+      .map((childId) => modelState.classes.find((item) => item.id === childId))
+      .filter(Boolean)
+      .sort((a, b) => a.position.y - b.position.y);
+    childModels.forEach((childModel, index) => {
+      childModel.collapsed = true;
+      childModel.position = {
+        x: parentClass.position.x + depth * spacingX,
+        y: parentClass.position.y + index * spacingY,
+      };
+    });
   });
   render();
 };
@@ -878,63 +1045,24 @@ const updateRelationship = (relationshipId, updates) => {
 };
 
 const openRelationshipPopover = (anchor, relationship) => {
+  setActiveRelationship(relationship.id);
   openPopover(anchor, (popover) => {
     popover.classList.add("relationship-popover");
 
-    const header = document.createElement("p");
-    header.className = "relationship-popover__title";
-    header.textContent = "Scaffold on instantiate";
-
-    const scaffoldRow = document.createElement("label");
-    scaffoldRow.className = "relationship-popover__row";
-    const scaffoldInput = document.createElement("input");
-    scaffoldInput.type = "checkbox";
-    scaffoldInput.checked = Boolean(relationship.generateOnInstantiate);
-    scaffoldInput.setAttribute("data-no-drag", "true");
-    scaffoldInput.addEventListener("pointerdown", (event) =>
-      event.stopPropagation()
-    );
-    scaffoldInput.addEventListener("change", (event) => {
-      updateRelationship(relationship.id, {
-        generateOnInstantiate: event.target.checked,
-      });
+    const removeButton = document.createElement("button");
+    removeButton.type = "button";
+    removeButton.className = "relationship-popover__remove";
+    removeButton.textContent = "Remove link";
+    removeButton.addEventListener("click", () => {
+      recordHistory();
+      modelState.relationships = modelState.relationships.filter(
+        (item) => item.id !== relationship.id
+      );
+      closeActivePopover();
+      render();
     });
-    const scaffoldText = document.createElement("span");
-    scaffoldText.textContent = "Auto-generate on Create Instance";
-    scaffoldRow.appendChild(scaffoldInput);
-    scaffoldRow.appendChild(scaffoldText);
 
-    const cardinalityRow = document.createElement("label");
-    cardinalityRow.className = "relationship-popover__row";
-    const cardinalityLabel = document.createElement("span");
-    cardinalityLabel.textContent = "Cardinality";
-    const cardinalitySelect = document.createElement("select");
-    cardinalitySelect.className = "relationship-popover__select";
-    cardinalitySelect.setAttribute("data-no-drag", "true");
-    const optionOne = document.createElement("option");
-    optionOne.value = "one";
-    optionOne.textContent = "One";
-    const optionMany = document.createElement("option");
-    optionMany.value = "many";
-    optionMany.textContent = "Many";
-    cardinalitySelect.appendChild(optionOne);
-    cardinalitySelect.appendChild(optionMany);
-    cardinalitySelect.value =
-      relationship.cardinalityHint === "many" ? "many" : "one";
-    cardinalitySelect.addEventListener("pointerdown", (event) =>
-      event.stopPropagation()
-    );
-    cardinalitySelect.addEventListener("change", (event) => {
-      updateRelationship(relationship.id, {
-        cardinalityHint: event.target.value === "many" ? "many" : "one",
-      });
-    });
-    cardinalityRow.appendChild(cardinalityLabel);
-    cardinalityRow.appendChild(cardinalitySelect);
-
-    popover.appendChild(header);
-    popover.appendChild(scaffoldRow);
-    popover.appendChild(cardinalityRow);
+    popover.appendChild(removeButton);
   });
 };
 
@@ -968,6 +1096,7 @@ const renderLines = () => {
     line.setAttribute("stroke", getSchemaRelationshipColor());
     line.setAttribute("stroke-width", "2");
     line.setAttribute("stroke-linecap", "round");
+    line.setAttribute("class", "relationship-line");
     line.dataset.relationshipId = relationship.id;
     line.addEventListener("pointerdown", (event) => event.stopPropagation());
     line.addEventListener("click", (event) => {
@@ -986,6 +1115,7 @@ const renderLines = () => {
     label.setAttribute("x", (x1 + x2) / 2);
     label.setAttribute("y", (y1 + y2) / 2 - 6);
     label.setAttribute("class", "relationship-label");
+    label.dataset.relationshipId = relationship.id;
     label.textContent = relationshipLabels[relationship.type] || relationship.type;
     label.addEventListener("pointerdown", (event) => event.stopPropagation());
     label.addEventListener("click", (event) => {
@@ -997,6 +1127,7 @@ const renderLines = () => {
     });
     linesSvg.appendChild(label);
   });
+  setActiveRelationship(activeRelationshipId);
 };
 
 const updateCanvasBounds = () => {
@@ -1387,6 +1518,17 @@ const render = () => {
     node.appendChild(addSubclassInlineButton);
 
     node.addEventListener("pointerdown", (event) => {
+      if (multiGrabState) {
+        event.preventDefault();
+        if (event.button === 2) {
+          exitMultiGrab();
+        }
+        if (event.button === 0) {
+          selectMultiGrabNodes();
+          exitMultiGrab();
+        }
+        return;
+      }
       if (event.target.closest("button") || isNoDragTarget(event)) {
         return;
       }
@@ -1415,7 +1557,7 @@ const render = () => {
 
     node.addEventListener("contextmenu", (event) => {
       event.preventDefault();
-      if (selectionMode) {
+      if (selectionMode || multiGrabState) {
         return;
       }
       openTemplateMenu({ x: event.clientX, y: event.clientY }, classModel);
@@ -1903,6 +2045,11 @@ const importJson = (jsonText, fileName = "") => {
 };
 
 const handlePointerMove = (event) => {
+  lastPointerPosition = { x: event.clientX, y: event.clientY };
+  if (multiGrabState) {
+    multiGrabState.current = getCanvasPoint(event);
+    updateMultiGrabBox();
+  }
   if (dragState && dragState.pointerId === event.pointerId) {
     if (!dragState.hasRecorded) {
       recordHistory();
@@ -2166,6 +2313,14 @@ document.addEventListener("pointerdown", (event) => {
   setViewOptionsOpen(false);
 });
 
+document.addEventListener("contextmenu", (event) => {
+  if (!multiGrabState) {
+    return;
+  }
+  event.preventDefault();
+  exitMultiGrab();
+});
+
 if (openProjectInput) {
   openProjectInput.addEventListener("change", (event) => {
     const file = event.target.files && event.target.files[0];
@@ -2249,7 +2404,42 @@ classCancelButton.addEventListener("click", () => {
   closeModal(classModal);
 });
 
+document.addEventListener("keydown", (event) => {
+  if (event.key.toLowerCase() !== "g") {
+    return;
+  }
+  if (event.repeat || isTextInputTarget(event)) {
+    return;
+  }
+  if (multiGrabState) {
+    return;
+  }
+  const fallbackPoint = (() => {
+    const rect = canvasContent.getBoundingClientRect();
+    return getCanvasPointFromClient(
+      rect.left + rect.width / 2,
+      rect.top + rect.height / 2
+    );
+  })();
+  const startPoint = lastPointerPosition
+    ? getCanvasPointFromClient(lastPointerPosition.x, lastPointerPosition.y)
+    : fallbackPoint;
+  startMultiGrab(startPoint);
+});
+
 canvas.addEventListener("pointerdown", (event) => {
+  if (multiGrabState) {
+    event.preventDefault();
+    if (event.button === 2) {
+      exitMultiGrab();
+      return;
+    }
+    if (event.button === 0) {
+      selectMultiGrabNodes();
+      exitMultiGrab();
+    }
+    return;
+  }
   if (!isCanvasPanTarget(event) || isNoDragTarget(event)) {
     return;
   }
