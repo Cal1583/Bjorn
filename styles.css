@@ -346,6 +346,11 @@ body {
   box-shadow: 0 0 0 2px rgba(108, 125, 214, 0.15);
 }
 
+.class-node--multi-selected {
+  border-color: #5d76d3;
+  box-shadow: 0 0 0 3px rgba(93, 118, 211, 0.35);
+}
+
 .class-node.class-node--match {
   border-color: #f6a23c;
   box-shadow: 0 0 0 3px rgba(246, 162, 60, 0.25);
@@ -567,6 +572,21 @@ body {
   gap: 0.5rem;
 }
 
+.relationship-popover__remove {
+  border: none;
+  background: #fbeaea;
+  color: #b12525;
+  font-weight: 600;
+  border-radius: 8px;
+  padding: 0.4rem 0.6rem;
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+
+.relationship-popover__remove:hover {
+  background: #f7d6d6;
+}
+
 .template-menu {
   position: absolute;
   z-index: 11;
@@ -591,6 +611,24 @@ body {
 
 .template-menu button:hover {
   background: #e6ebff;
+}
+
+.template-menu button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.multi-grab-box {
+  position: absolute;
+  border: 2px dashed rgba(93, 118, 211, 0.8);
+  background: rgba(93, 118, 211, 0.15);
+  border-radius: 6px;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.canvas--multi-grab {
+  cursor: crosshair;
 }
 
 .attribute-popover__input {
@@ -876,6 +914,24 @@ body {
   fill: var(--schema-relationship);
   font-size: 12px;
   font-weight: 600;
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.relationship-line {
+  stroke: var(--schema-relationship);
+  pointer-events: stroke;
+  cursor: pointer;
+}
+
+.relationship-line.is-active {
+  stroke-width: 3.5;
+  filter: drop-shadow(0 0 6px rgba(249, 110, 91, 0.6));
+}
+
+.relationship-label.is-active {
+  fill: #f24c37;
+  font-weight: 700;
 }
 
 :root[data-theme="dark"] {
@@ -957,6 +1013,11 @@ body {
   box-shadow: 0 0 0 2px rgba(154, 167, 255, 0.35);
 }
 
+:root[data-theme="dark"] .class-node--multi-selected {
+  border-color: #7f8ff0;
+  box-shadow: 0 0 0 3px rgba(127, 143, 240, 0.45);
+}
+
 :root[data-theme="dark"] .attribute {
   background: #242b3f;
   border-color: #323b55;
@@ -1028,6 +1089,20 @@ body {
 
 :root[data-theme="dark"] .template-menu button:hover {
   background: #334062;
+}
+
+:root[data-theme="dark"] .relationship-popover__remove {
+  background: #3a1f25;
+  color: #f2b4b4;
+}
+
+:root[data-theme="dark"] .relationship-popover__remove:hover {
+  background: #4a252c;
+}
+
+:root[data-theme="dark"] .multi-grab-box {
+  border-color: rgba(143, 168, 255, 0.8);
+  background: rgba(93, 118, 211, 0.2);
 }
 
 :root[data-theme="dark"] .attribute-popover__input {
