@@ -935,6 +935,13 @@ body {
   border-color: #5c6fb8;
 }
 
+:root[data-theme="dark"] .class-node__actions button,
+:root[data-theme="dark"] .modal__actions button,
+:root[data-theme="dark"] .class-form__actions button#class-cancel {
+  background: #2a3147;
+  color: #e2e7f5;
+}
+
 :root[data-theme="dark"] .modal {
   background: #1a2031;
   box-shadow: 0 16px 36px rgba(5, 8, 16, 0.6);
