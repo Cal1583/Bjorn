@@ -153,7 +153,7 @@
                 <h2>Fixed Bills Status</h2>
               </header>
               <div class="budget-table" id="budget-bills-table"></div>
-              <form class="budget-form" id="budget-add-bill">
+              <form class="budget-form budget-form--bills" id="budget-add-bill">
                 <input
                   type="text"
                   name="billName"
@@ -168,6 +168,17 @@
                   placeholder="Budget"
                   required
                 />
+                <input
+                  type="number"
+                  name="billActual"
+                  step="0.01"
+                  min="0"
+                  placeholder="Actual"
+                />
+                <select name="billStatus">
+                  <option value="unpaid" selected>Unpaid</option>
+                  <option value="paid">Paid</option>
+                </select>
                 <button type="submit">Add bill</button>
               </form>
             </section>

@@ -1125,6 +1125,10 @@ body[data-view="budget"] .mini-toolbar {
   margin-top: 0.75rem;
 }
 
+.budget-form--bills {
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+}
+
 .budget-form__field {
   display: grid;
   gap: 0.3rem;
