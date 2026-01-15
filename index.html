@@ -3,182 +3,248 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>VEFA Budget Maker</title>
+    <title>Vefa</title>
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
     <div class="app-layout">
       <aside class="sidebar">
         <div class="sidebar__brand">
-          <span class="sidebar__app-name">VEFA Budget Maker</span>
+          <span class="sidebar__app-name">Vefa</span>
         </div>
         <div class="sidebar__section">
-          <button id="new-project">New</button>
-          <button id="open-project">Open</button>
+          <button id="new-project">New project</button>
+          <button id="open-project">Open...</button>
           <button id="save-project">Save</button>
-          <button id="save-project-as">Save As</button>
+          <button id="save-project-as">Save as...</button>
+          <button id="open-model">Model view</button>
+          <button id="open-colors">Edit colors</button>
         </div>
         <div class="sidebar__section">
-          <p class="sidebar__label">Data</p>
-          <button id="import-transactions">Import CSV</button>
-          <button id="export-budget">Export budget JSON</button>
-          <button id="import-budget">Import budget JSON</button>
-          <input id="transactions-input" type="file" accept=".csv" hidden />
-          <input id="budget-input" type="file" accept="application/json" hidden />
+          <button id="add-class">Add Class</button>
+          <button id="add-subclass">Add Subclass</button>
+          <button id="create-instance">Create Instance</button>
+          <button id="create-core-instance">Create Core</button>
+          <button id="create-half-core">Create Half-Core</button>
         </div>
         <div class="sidebar__section">
-          <p class="sidebar__label">Status</p>
-          <div class="sidebar__status" id="status">Ready to review transactions.</div>
+          <p class="sidebar__label">Set relationship</p>
+          <div class="relationship-buttons" id="relationship-buttons">
+            <button
+              type="button"
+              data-relationship-type="one-to-many"
+              title="Set a one-to-many relationship"
+            >
+              1 → *
+            </button>
+            <button
+              type="button"
+              data-relationship-type="many-to-many"
+              title="Set a many-to-many relationship"
+            >
+              * ↔ *
+            </button>
+            <button
+              type="button"
+              data-relationship-type="parent-child"
+              title="Set a parent-child relationship"
+            >
+              ⤴
+            </button>
+          </div>
         </div>
+        <hr class="sidebar__divider" />
+        <div class="sidebar__section">
+          <p class="sidebar__label">Templates</p>
+          <div class="template-list" id="template-list"></div>
+          <p class="template-empty" id="template-empty">
+            Right-click a class to save it here.
+          </p>
+        </div>
+        <div class="sidebar__section">
+          <button id="open-legend">Legend</button>
+        </div>
+        <div class="sidebar__status" id="status"></div>
       </aside>
 
-      <main class="main">
+      <main class="canvas" id="canvas">
         <div class="mini-toolbar">
           <div class="mini-toolbar__section mini-toolbar__section--primary">
             <input
               id="search-input"
               type="search"
-              placeholder="Search transactions..."
+              placeholder="Search classes..."
               autocomplete="off"
             />
-            <button id="theme-toggle" type="button" aria-pressed="false">
-              Dark mode
-            </button>
+            <button id="undo-action" type="button">Undo</button>
+            <button id="redo-action" type="button">Redo</button>
           </div>
         </div>
-
-        <section class="overview">
-          <div class="panel">
-            <div class="panel__header">
-              <h2>Fixed Bills Status</h2>
-              <span class="panel__meta"
-                >Bills Remaining: <strong id="bills-remaining">$0</strong></span
-              >
-            </div>
-            <div class="panel__body">
-              <table class="data-table">
-                <thead>
-                  <tr>
-                    <th>Bill</th>
-                    <th>Budget</th>
-                    <th>Actual</th>
-                    <th>Status</th>
-                    <th>Override</th>
-                  </tr>
-                </thead>
-                <tbody id="bills-table"></tbody>
-              </table>
-            </div>
-          </div>
-
-          <div class="panel">
-            <div class="panel__header">
-              <h2>Running Categories</h2>
-            </div>
-            <div class="panel__body">
-              <table class="data-table">
-                <thead>
-                  <tr>
-                    <th>Category</th>
-                    <th>Cap</th>
-                    <th>Spent</th>
-                  </tr>
-                </thead>
-                <tbody id="categories-table"></tbody>
-              </table>
-            </div>
-          </div>
-        </section>
-
-        <section class="summary-grid">
-          <div class="panel panel--compact">
-            <div class="panel__header">
-              <h3>Quick Totals</h3>
-            </div>
-            <div class="panel__body quick-totals">
-              <div>
-                <span>Loaded Transactions (month)</span>
-                <strong id="total-transactions">$0</strong>
-              </div>
-              <div>
-                <span>Bills Remaining</span>
-                <strong id="total-bills-remaining">$0</strong>
-              </div>
-              <div>
-                <span>Remaining Balance</span>
-                <strong id="remaining-balance">$0</strong>
+        <div class="view-toolbar">
+          <div class="mini-toolbar__section mini-toolbar__section--view">
+            <span class="view-toolbar__zoom" id="zoom-display">100%</span>
+            <button
+              id="view-options-toggle"
+              type="button"
+              aria-expanded="false"
+              aria-controls="view-options"
+            >
+              View options
+            </button>
+            <div class="view-options" id="view-options" hidden>
+              <span class="mini-toolbar__label">View</span>
+              <div class="view-options__buttons">
+                <button id="fit-to-screen" type="button">Fit to screen</button>
+                <button id="grid-toggle" type="button" aria-pressed="false">
+                  Grid toggle
+                </button>
+                <button id="snap-toggle" type="button" aria-pressed="false">
+                  Snap toggle
+                </button>
+                <button id="view-definitions" type="button">Definitions</button>
+                <button
+                  id="theme-toggle"
+                  type="button"
+                  aria-pressed="false"
+                >
+                  Dark mode
+                </button>
               </div>
             </div>
           </div>
-
-          <div class="panel panel--compact">
-            <div class="panel__header">
-              <h3>Unintentional Spending</h3>
-              <span class="panel__meta" id="unintentional-total">$0</span>
-            </div>
-            <div class="panel__body" id="unintentional-list"></div>
-          </div>
-        </section>
-
-        <section class="panel transaction-panel">
-          <div class="panel__header panel__header--split">
-            <div>
-              <h2>Transaction Review</h2>
-              <p class="panel__subtitle">
-                Assign transactions to fixed bills or categories and mark reviewed.
-              </p>
-            </div>
-            <div class="filter-group">
-              <button class="filter-button is-active" data-filter="all">All</button>
-              <button class="filter-button" data-filter="reviewed">Reviewed</button>
-              <button class="filter-button" data-filter="unreviewed">Unreviewed</button>
-            </div>
-          </div>
-          <div class="panel__body">
-            <table class="data-table data-table--transactions">
-              <thead>
-                <tr>
-                  <th>Date</th>
-                  <th>Merchant / Description</th>
-                  <th>Amount</th>
-                  <th>Current Assignment</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody id="transactions-table"></tbody>
-            </table>
-          </div>
-        </section>
+        </div>
+        <div class="canvas__content" id="canvas-content">
+          <svg class="canvas__lines" id="relationship-lines"></svg>
+        </div>
       </main>
     </div>
 
-    <aside class="modal" id="assign-modal" hidden>
-      <div class="modal__content">
-        <div class="modal__header">
-          <h2>Assign Transaction</h2>
-          <button type="button" id="assign-close">Close</button>
+    <aside class="modal" id="model-modal" hidden>
+      <div class="modal__header" data-drag-handle="true">
+        <h2 class="modal__title">Model JSON</h2>
+        <div class="modal__actions">
+          <button type="button" data-modal-action="close">Close</button>
         </div>
-        <div class="modal__body">
-          <form id="assign-form">
-            <label class="form-row">
-              <span>Assignment Type</span>
-              <select id="assign-type">
-                <option value="bill">Fixed Bill</option>
-                <option value="category">Running Category</option>
-                <option value="unintentional">Unintentional</option>
-              </select>
-            </label>
-            <label class="form-row" id="assign-target-row">
-              <span>Target</span>
-              <select id="assign-target"></select>
-            </label>
-            <div class="form-actions">
-              <button type="submit">Save Assignment</button>
-            </div>
-          </form>
+      </div>
+      <div class="modal__body">
+        <textarea id="export-output" readonly></textarea>
+      </div>
+    </aside>
+
+    <aside class="modal" id="legend-modal" hidden>
+      <div class="modal__header" data-drag-handle="true">
+        <h2 class="modal__title">Schema color legend</h2>
+        <div class="modal__actions">
+          <button type="button" data-modal-action="close">Close</button>
+        </div>
+      </div>
+      <div class="modal__body">
+        <div class="legend-list">
+          <span class="legend-item">
+            <span class="legend-swatch legend-swatch--class" aria-hidden="true"></span>
+            Class
+          </span>
+          <span class="legend-item">
+            <span class="legend-swatch legend-swatch--id" aria-hidden="true"></span>
+            Id
+          </span>
+          <span class="legend-item">
+            <span class="legend-swatch legend-swatch--attribute" aria-hidden="true"></span>
+            Attribute
+          </span>
+          <span class="legend-item">
+            <span class="legend-swatch legend-swatch--relationship" aria-hidden="true"></span>
+            Relationship
+          </span>
         </div>
       </div>
     </aside>
+
+    <aside class="modal" id="colors-modal" hidden>
+      <div class="modal__header" data-drag-handle="true">
+        <h2 class="modal__title">Edit schema colors</h2>
+        <div class="modal__actions">
+          <button type="button" data-modal-action="close">Close</button>
+        </div>
+      </div>
+      <div class="modal__body">
+        <form id="colors-form" class="colors-form">
+          <label class="colors-form__row">
+            <span>Class</span>
+            <input name="class" type="text" placeholder="#3f9aae" />
+            <span class="colors-form__swatch" data-color-preview="class"></span>
+          </label>
+          <label class="colors-form__row">
+            <span>Subclass</span>
+            <input name="subclass" type="text" placeholder="#5d76d3" />
+            <span
+              class="colors-form__swatch"
+              data-color-preview="subclass"
+            ></span>
+          </label>
+          <label class="colors-form__row">
+            <span>Instance</span>
+            <input name="instance" type="text" placeholder="#6c7dd6" />
+            <span
+              class="colors-form__swatch"
+              data-color-preview="instance"
+            ></span>
+          </label>
+          <label class="colors-form__row">
+            <span>Core instance</span>
+            <input name="core-instance" type="text" placeholder="#8f6bd9" />
+            <span
+              class="colors-form__swatch"
+              data-color-preview="core-instance"
+            ></span>
+          </label>
+          <label class="colors-form__row">
+            <span>Attribute</span>
+            <input name="attribute" type="text" placeholder="#79c9c5" />
+            <span class="colors-form__swatch" data-color-preview="attribute"></span>
+          </label>
+          <label class="colors-form__row">
+            <span>Id</span>
+            <input name="id" type="text" placeholder="#ffe2af" />
+            <span class="colors-form__swatch" data-color-preview="id"></span>
+          </label>
+          <label class="colors-form__row">
+            <span>Relationship</span>
+            <input name="relationship" type="text" placeholder="#f96e5b" />
+            <span class="colors-form__swatch" data-color-preview="relationship"></span>
+          </label>
+          <p class="colors-form__error" id="colors-error" role="alert"></p>
+          <div class="colors-form__actions">
+            <button type="submit">Apply colors</button>
+          </div>
+        </form>
+      </div>
+    </aside>
+
+    <aside class="modal modal--centered" id="class-modal" hidden>
+      <div class="modal__header">
+        <h2 class="modal__title">Add class</h2>
+      </div>
+      <div class="modal__body">
+        <form id="class-form" class="class-form">
+          <label class="class-form__label" for="class-name">Class title</label>
+          <input
+            id="class-name"
+            name="className"
+            type="text"
+            placeholder="Enter class title"
+            autocomplete="off"
+          />
+          <p class="class-form__error" id="class-error" role="alert"></p>
+          <div class="class-form__actions">
+            <button type="submit">Add class</button>
+            <button type="button" id="class-cancel">Close</button>
+          </div>
+        </form>
+      </div>
+    </aside>
+
+    <input type="file" id="open-project-input" accept=".json" hidden />
 
     <script src="app.js"></script>
   </body>
