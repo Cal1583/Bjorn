@@ -44,6 +44,31 @@ const viewDefinitionsButton = document.getElementById("view-definitions");
 const themeToggleButton = document.getElementById("theme-toggle");
 const templateList = document.getElementById("template-list");
 const templateEmpty = document.getElementById("template-empty");
+const openBudgetButton = document.getElementById("open-budget");
+const budgetView = document.getElementById("budget-view");
+const budgetTotals = document.getElementById("budget-totals");
+const budgetBillsTable = document.getElementById("budget-bills-table");
+const budgetCategoriesTable = document.getElementById("budget-categories-table");
+const budgetUnintentional = document.getElementById("budget-unintentional");
+const budgetTransactions = document.getElementById("budget-transactions");
+const budgetFilter = document.getElementById("budget-filter");
+const budgetImportCsvButton = document.getElementById("budget-import-csv");
+const budgetExportJsonButton = document.getElementById("budget-export-json");
+const budgetImportJsonButton = document.getElementById("budget-import-json");
+const budgetCsvInput = document.getElementById("budget-csv-input");
+const budgetJsonInput = document.getElementById("budget-json-input");
+const budgetAddBillForm = document.getElementById("budget-add-bill");
+const budgetAddCategoryForm = document.getElementById("budget-add-category");
+const budgetRulesList = document.getElementById("budget-rules-list");
+const budgetAddRuleForm = document.getElementById("budget-add-rule");
+const budgetRuleTarget = document.getElementById("budget-rule-target");
+const budgetAssignModal = document.getElementById("budget-assign-modal");
+const budgetAssignForm = document.getElementById("budget-assign-form");
+const budgetAssignType = document.getElementById("budget-assign-type");
+const budgetAssignTarget = document.getElementById("budget-assign-target");
+const budgetAssignTargetField = document.getElementById(
+  "budget-assign-target-field"
+);
 
 let modelState = {
   classes: [],
@@ -74,6 +99,11 @@ let activeTemplateMenu = null;
 let activeRelationshipId = null;
 let multiGrabState = null;
 let lastPointerPosition = null;
+let activeModule = "vefa";
+let budgetState = null;
+let budgetFilterMode = "all";
+let budgetSearchQuery = "";
+let activeAssignmentTransactionId = null;
 
 const zoomSettings = {
   min: 0.1,
@@ -2210,6 +2240,614 @@ if (createHalfCoreButton) {
   });
 }
 
+const budgetStorageKey = "vefa-budget-data-v1";
+
+const createBudgetId = (prefix) =>
+  `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
+
+const formatCurrency = (value) => {
+  const formatter = new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+  });
+  const normalized = Number.isFinite(value) ? value : 0;
+  return formatter.format(normalized);
+};
+
+const parseNumber = (value) => {
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+  const normalized = parseFloat(String(value).replace(/[^0-9.-]/g, ""));
+  return Number.isNaN(normalized) ? null : normalized;
+};
+
+const getBudgetDefaults = () => ({
+  bills: [],
+  categories: [],
+  rules: [],
+  transactions: [],
+});
+
+const sanitizeBudgetState = (state) => ({
+  bills: Array.isArray(state?.bills) ? state.bills : [],
+  categories: Array.isArray(state?.categories) ? state.categories : [],
+  rules: Array.isArray(state?.rules) ? state.rules : [],
+  transactions: Array.isArray(state?.transactions) ? state.transactions : [],
+});
+
+const loadBudgetState = () => {
+  if (!window.localStorage) {
+    return getBudgetDefaults();
+  }
+  const stored = localStorage.getItem(budgetStorageKey);
+  if (!stored) {
+    return getBudgetDefaults();
+  }
+  try {
+    return sanitizeBudgetState(JSON.parse(stored));
+  } catch (error) {
+    return getBudgetDefaults();
+  }
+};
+
+const saveBudgetState = () => {
+  if (!window.localStorage) {
+    return;
+  }
+  localStorage.setItem(budgetStorageKey, JSON.stringify(budgetState));
+};
+
+const ensureBudgetState = () => {
+  if (!budgetState) {
+    budgetState = loadBudgetState();
+  }
+};
+
+const setActiveModule = (moduleName) => {
+  activeModule = moduleName;
+  document.body.dataset.view = moduleName === "budget" ? "budget" : "vefa";
+  if (openBudgetButton) {
+    openBudgetButton.setAttribute(
+      "aria-pressed",
+      moduleName === "budget" ? "true" : "false"
+    );
+  }
+  if (budgetView) {
+    budgetView.hidden = moduleName !== "budget";
+  }
+  if (searchInput) {
+    searchInput.placeholder =
+      moduleName === "budget" ? "Search transactions..." : "Search classes...";
+    searchInput.value =
+      moduleName === "budget" ? budgetSearchQuery : searchQuery;
+  }
+  if (moduleName === "budget") {
+    renderBudget();
+  }
+};
+
+const getBillActual = (bill) => {
+  const actualFromTransactions = budgetState.transactions
+    .filter(
+      (transaction) =>
+        transaction.tag?.type === "bill" &&
+        transaction.tag?.targetId === bill.id
+    )
+    .reduce((sum, transaction) => sum + Math.abs(transaction.amount || 0), 0);
+  if (bill.actual === null || bill.actual === undefined) {
+    return actualFromTransactions;
+  }
+  return bill.actual;
+};
+
+const getCategorySpent = (category) =>
+  budgetState.transactions
+    .filter(
+      (transaction) =>
+        transaction.tag?.type === "category" &&
+        transaction.tag?.targetId === category.id
+    )
+    .reduce((sum, transaction) => sum + Math.abs(transaction.amount || 0), 0);
+
+const getTagLabel = (tag) => {
+  if (!tag || tag.type === "unintentional") {
+    return "Unintentional";
+  }
+  if (tag.type === "bill") {
+    return (
+      budgetState.bills.find((bill) => bill.id === tag.targetId)?.name ||
+      "Bill"
+    );
+  }
+  if (tag.type === "category") {
+    return (
+      budgetState.categories.find((category) => category.id === tag.targetId)
+        ?.name || "Category"
+    );
+  }
+  return "Unintentional";
+};
+
+const renderBudgetTotals = () => {
+  if (!budgetTotals) {
+    return;
+  }
+  const totalTransactions = budgetState.transactions.length;
+  const billsRemaining = budgetState.bills.filter((bill) => !bill.paid).length;
+  const totalBudget =
+    budgetState.bills.reduce((sum, bill) => sum + (bill.budget || 0), 0) +
+    budgetState.categories.reduce(
+      (sum, category) => sum + (category.cap || 0),
+      0
+    );
+  const totalSpent = budgetState.transactions.reduce(
+    (sum, transaction) => sum + Math.abs(transaction.amount || 0),
+    0
+  );
+  const remainingBalance = totalBudget - totalSpent;
+  budgetTotals.innerHTML = [
+    {
+      label: "Loaded Transactions",
+      value: totalTransactions.toString(),
+    },
+    {
+      label: "Bills Remaining",
+      value: billsRemaining.toString(),
+    },
+    {
+      label: "Remaining Balance",
+      value: formatCurrency(remainingBalance),
+    },
+  ]
+    .map(
+      (item) => `<div class="budget-total-card">
+        <span>${item.label}</span>
+        <strong>${item.value}</strong>
+      </div>`
+    )
+    .join("");
+};
+
+const renderBudgetBills = () => {
+  if (!budgetBillsTable) {
+    return;
+  }
+  budgetBillsTable.innerHTML = "";
+  const headerRow = document.createElement("div");
+  headerRow.className = "budget-row budget-row--header";
+  headerRow.innerHTML = `
+    <div>Bill</div>
+    <div>Budget</div>
+    <div>Actual</div>
+    <div>Paid/Unpaid</div>
+  `;
+  budgetBillsTable.appendChild(headerRow);
+  budgetState.bills.forEach((bill) => {
+    const row = document.createElement("div");
+    row.className = "budget-row";
+    const actualValue = getBillActual(bill);
+    row.innerHTML = `
+      <input type="text" value="${bill.name}" />
+      <input type="number" step="0.01" min="0" value="${bill.budget ?? ""}" />
+      <input type="number" step="0.01" min="0" value="${
+        actualValue ?? ""
+      }" />
+      <label class="budget-row__toggle">
+        <input type="checkbox" ${bill.paid ? "checked" : ""} />
+        <span>${bill.paid ? "Paid" : "Unpaid"}</span>
+      </label>
+    `;
+    const inputs = row.querySelectorAll("input");
+    const nameInput = inputs[0];
+    const budgetInput = inputs[1];
+    const actualInput = inputs[2];
+    const paidInput = inputs[3];
+    nameInput.addEventListener("input", (event) => {
+      bill.name = event.target.value;
+      saveBudgetState();
+      renderBudget();
+    });
+    budgetInput.addEventListener("input", (event) => {
+      const next = parseNumber(event.target.value);
+      bill.budget = next ?? 0;
+      saveBudgetState();
+      renderBudgetTotals();
+    });
+    actualInput.addEventListener("input", (event) => {
+      const next = parseNumber(event.target.value);
+      bill.actual = next;
+      saveBudgetState();
+      renderBudgetTotals();
+    });
+    paidInput.addEventListener("change", () => {
+      bill.paid = paidInput.checked;
+      saveBudgetState();
+      renderBudgetTotals();
+      renderBudgetBills();
+    });
+    budgetBillsTable.appendChild(row);
+  });
+};
+
+const renderBudgetCategories = () => {
+  if (!budgetCategoriesTable) {
+    return;
+  }
+  budgetCategoriesTable.innerHTML = "";
+  const headerRow = document.createElement("div");
+  headerRow.className = "budget-row budget-row--header budget-row--categories";
+  headerRow.innerHTML = `
+    <div>Category</div>
+    <div>Cap</div>
+    <div>Spent</div>
+  `;
+  budgetCategoriesTable.appendChild(headerRow);
+  budgetState.categories.forEach((category) => {
+    const row = document.createElement("div");
+    row.className = "budget-row budget-row--categories";
+    const spent = getCategorySpent(category);
+    row.innerHTML = `
+      <input type="text" value="${category.name}" />
+      <input type="number" step="0.01" min="0" value="${
+        category.cap ?? ""
+      }" />
+      <div>${formatCurrency(spent)}</div>
+    `;
+    const [nameInput, capInput] = row.querySelectorAll("input");
+    nameInput.addEventListener("input", (event) => {
+      category.name = event.target.value;
+      saveBudgetState();
+      renderBudget();
+    });
+    capInput.addEventListener("input", (event) => {
+      const next = parseNumber(event.target.value);
+      category.cap = next ?? 0;
+      saveBudgetState();
+      renderBudgetTotals();
+    });
+    budgetCategoriesTable.appendChild(row);
+  });
+};
+
+const renderBudgetUnintentional = () => {
+  if (!budgetUnintentional) {
+    return;
+  }
+  const unintentionalTransactions = budgetState.transactions.filter(
+    (transaction) => transaction.tag?.type === "unintentional"
+  );
+  const total = unintentionalTransactions.reduce(
+    (sum, transaction) => sum + Math.abs(transaction.amount || 0),
+    0
+  );
+  const list = unintentionalTransactions.slice(0, 5);
+  budgetUnintentional.innerHTML = `
+    <div class="budget-unintentional__summary">
+      <strong>${formatCurrency(total)}</strong>
+      <span>${unintentionalTransactions.length} transactions</span>
+    </div>
+    <div class="budget-unintentional__list">
+      ${list
+        .map(
+          (transaction) => `
+            <div class="budget-unintentional__item">
+              <span>${transaction.description}</span>
+              <span>${formatCurrency(Math.abs(transaction.amount || 0))}</span>
+            </div>
+          `
+        )
+        .join("")}
+    </div>
+  `;
+};
+
+const renderBudgetRules = () => {
+  if (!budgetRulesList) {
+    return;
+  }
+  budgetRulesList.innerHTML = "";
+  budgetState.rules.forEach((rule) => {
+    const ruleRow = document.createElement("div");
+    ruleRow.className = "budget-rule";
+    const targetLabel =
+      rule.type === "bill"
+        ? budgetState.bills.find((bill) => bill.id === rule.targetId)?.name
+        : rule.type === "category"
+        ? budgetState.categories.find(
+            (category) => category.id === rule.targetId
+          )?.name
+        : null;
+    ruleRow.innerHTML = `
+      <span>
+        "${rule.keyword}" → ${rule.type}${
+      targetLabel ? ` (${targetLabel})` : ""
+    }${rule.matchAmount ? ` @ ${formatCurrency(rule.matchAmount)}` : ""}
+      </span>
+      <button type="button">Remove</button>
+    `;
+    ruleRow.querySelector("button").addEventListener("click", () => {
+      budgetState.rules = budgetState.rules.filter((item) => item.id !== rule.id);
+      saveBudgetState();
+      renderBudgetRules();
+    });
+    budgetRulesList.appendChild(ruleRow);
+  });
+};
+
+const renderBudgetTransactions = () => {
+  if (!budgetTransactions) {
+    return;
+  }
+  const filteredTransactions = budgetState.transactions.filter((transaction) => {
+    if (budgetFilterMode === "reviewed" && !transaction.reviewed) {
+      return false;
+    }
+    if (budgetFilterMode === "unreviewed" && transaction.reviewed) {
+      return false;
+    }
+    if (budgetSearchQuery) {
+      return transaction.description
+        .toLowerCase()
+        .includes(budgetSearchQuery.toLowerCase());
+    }
+    return true;
+  });
+  if (filteredTransactions.length === 0) {
+    budgetTransactions.innerHTML = `<p class="template-empty">No transactions loaded.</p>`;
+    return;
+  }
+  budgetTransactions.innerHTML = "";
+  filteredTransactions.forEach((transaction) => {
+    const row = document.createElement("div");
+    row.className = `budget-transaction ${
+      transaction.reviewed ? "is-reviewed" : ""
+    }`;
+    row.innerHTML = `
+      <div class="budget-transaction__meta">
+        <strong>${transaction.description}</strong>
+        <span>${transaction.date || "No date"}</span>
+      </div>
+      <div class="budget-transaction__meta">
+        <span>Tag</span>
+        <strong class="budget-transaction__tag">${getTagLabel(
+          transaction.tag
+        )}</strong>
+      </div>
+      <div class="budget-transaction__amount">
+        ${formatCurrency(transaction.amount || 0)}
+      </div>
+      <div class="budget-transaction__meta">
+        <span>Status</span>
+        <strong>${transaction.reviewed ? "Reviewed" : "Unreviewed"}</strong>
+      </div>
+      <div class="budget-transaction__actions">
+        <button type="button" data-action="assign">Assign</button>
+        <button type="button" data-action="review">
+          ${transaction.reviewed ? "Unreview" : "Reviewed"}
+        </button>
+      </div>
+    `;
+    row.querySelector('[data-action="assign"]').addEventListener("click", () => {
+      activeAssignmentTransactionId = transaction.id;
+      openAssignmentModal(transaction);
+    });
+    row.querySelector('[data-action="review"]').addEventListener("click", () => {
+      transaction.reviewed = !transaction.reviewed;
+      saveBudgetState();
+      renderBudgetTransactions();
+      renderBudgetTotals();
+    });
+    budgetTransactions.appendChild(row);
+  });
+};
+
+const renderBudgetRuleTargets = () => {
+  if (!budgetRuleTarget || !budgetAddRuleForm) {
+    return;
+  }
+  const type = budgetAddRuleForm.ruleType.value || "bill";
+  const targets =
+    type === "category" ? budgetState.categories : budgetState.bills;
+  budgetRuleTarget.disabled = type === "unintentional";
+  budgetRuleTarget.innerHTML =
+    type === "unintentional"
+      ? `<option value="">None</option>`
+      : targets
+          .map((item) => `<option value="${item.id}">${item.name}</option>`)
+          .join("");
+};
+
+const openAssignmentModal = (transaction) => {
+  if (!budgetAssignModal) {
+    return;
+  }
+  const type = transaction.tag?.type || "unintentional";
+  if (budgetAssignType) {
+    budgetAssignType.value = type;
+  }
+  updateAssignmentTargets(type);
+  if (budgetAssignTarget) {
+    budgetAssignTarget.value = transaction.tag?.targetId || "";
+  }
+  toggleModal(budgetAssignModal);
+};
+
+const updateAssignmentTargets = (type) => {
+  if (!budgetAssignTarget || !budgetAssignTargetField) {
+    return;
+  }
+  const targets = type === "category" ? budgetState.categories : budgetState.bills;
+  if (type === "unintentional") {
+    budgetAssignTarget.innerHTML = `<option value="">None</option>`;
+    budgetAssignTargetField.hidden = true;
+  } else {
+    budgetAssignTargetField.hidden = false;
+    budgetAssignTarget.innerHTML = targets
+      .map((item) => `<option value="${item.id}">${item.name}</option>`)
+      .join("");
+  }
+};
+
+const applyBudgetRules = (transaction) => {
+  const description = transaction.description.toLowerCase();
+  const amount = Math.abs(transaction.amount || 0);
+  const match = budgetState.rules.find((rule) => {
+    if (!description.includes(rule.keyword.toLowerCase())) {
+      return false;
+    }
+    if (rule.matchAmount) {
+      return Math.abs(rule.matchAmount - amount) < 0.01;
+    }
+    return true;
+  });
+  if (!match) {
+    return { type: "unintentional" };
+  }
+  if (match.type === "unintentional") {
+    return { type: "unintentional" };
+  }
+  return { type: match.type, targetId: match.targetId };
+};
+
+const parseCsv = (text) => {
+  const rows = [];
+  let current = [];
+  let cell = "";
+  let inQuotes = false;
+  for (let i = 0; i < text.length; i += 1) {
+    const char = text[i];
+    const next = text[i + 1];
+    if (char === '"' && inQuotes && next === '"') {
+      cell += '"';
+      i += 1;
+      continue;
+    }
+    if (char === '"') {
+      inQuotes = !inQuotes;
+      continue;
+    }
+    if (char === "," && !inQuotes) {
+      current.push(cell);
+      cell = "";
+      continue;
+    }
+    if ((char === "\n" || char === "\r") && !inQuotes) {
+      if (cell !== "" || current.length) {
+        current.push(cell);
+        rows.push(current);
+        current = [];
+        cell = "";
+      }
+      continue;
+    }
+    cell += char;
+  }
+  if (cell !== "" || current.length) {
+    current.push(cell);
+    rows.push(current);
+  }
+  return rows;
+};
+
+const importTransactionsFromCsv = (file) => {
+  const reader = new FileReader();
+  reader.onload = (event) => {
+    const text = event.target.result;
+    const rows = parseCsv(text);
+    if (!rows.length) {
+      return;
+    }
+    const headers = rows[0].map((header) => header.trim().toLowerCase());
+    const getIndex = (matches) =>
+      headers.findIndex((header) =>
+        matches.some((match) => header.includes(match))
+      );
+    const dateIndex = getIndex(["date", "posted"]);
+    const descriptionIndex = getIndex(["description", "memo", "payee"]);
+    const amountIndex = getIndex(["amount"]);
+    const debitIndex = getIndex(["debit", "withdrawal"]);
+    const creditIndex = getIndex(["credit", "deposit"]);
+    const existingKeys = new Set(
+      budgetState.transactions.map(
+        (transaction) =>
+          `${transaction.date}-${transaction.description}-${transaction.amount}`
+      )
+    );
+    const newTransactions = rows.slice(1).reduce((acc, row) => {
+      const description = row[descriptionIndex] || "Transaction";
+      const date = row[dateIndex] || "";
+      let amount = parseNumber(row[amountIndex]);
+      if (amount === null) {
+        const debit = parseNumber(row[debitIndex]) || 0;
+        const credit = parseNumber(row[creditIndex]) || 0;
+        amount = credit - debit;
+      }
+      if (amount === null) {
+        return acc;
+      }
+      const key = `${date}-${description}-${amount}`;
+      if (existingKeys.has(key)) {
+        return acc;
+      }
+      const transaction = {
+        id: createBudgetId("txn"),
+        date,
+        description,
+        amount,
+        reviewed: false,
+        tag: applyBudgetRules({ description, amount }),
+      };
+      acc.push(transaction);
+      existingKeys.add(key);
+      return acc;
+    }, []);
+    budgetState.transactions = [...newTransactions, ...budgetState.transactions];
+    saveBudgetState();
+    renderBudget();
+  };
+  reader.readAsText(file);
+};
+
+const exportBudgetJson = () => {
+  const blob = new Blob([JSON.stringify(budgetState, null, 2)], {
+    type: "application/json",
+  });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = "budget.json";
+  link.click();
+  URL.revokeObjectURL(url);
+};
+
+const importBudgetJson = (file) => {
+  const reader = new FileReader();
+  reader.onload = (event) => {
+    try {
+      budgetState = sanitizeBudgetState(JSON.parse(event.target.result));
+      saveBudgetState();
+      renderBudget();
+    } catch (error) {
+      setStatus("Invalid budget JSON.");
+    }
+  };
+  reader.readAsText(file);
+};
+
+const renderBudget = () => {
+  if (activeModule !== "budget") {
+    return;
+  }
+  renderBudgetTotals();
+  renderBudgetBills();
+  renderBudgetCategories();
+  renderBudgetUnintentional();
+  renderBudgetTransactions();
+  renderBudgetRules();
+  renderBudgetRuleTargets();
+};
+
 openLegendButton.addEventListener("click", () => toggleModal(legendModal));
 openModelButton.addEventListener("click", () => {
   exportOutput.value = exportJson();
@@ -2252,6 +2890,11 @@ if (zoomResetButton) {
 
 if (searchInput) {
   searchInput.addEventListener("input", (event) => {
+    if (activeModule === "budget") {
+      budgetSearchQuery = event.target.value;
+      renderBudgetTransactions();
+      return;
+    }
     searchQuery = event.target.value;
     updateSearchHighlights();
   });
@@ -2298,6 +2941,161 @@ if (themeToggleButton) {
   themeToggleButton.addEventListener("click", () =>
     setThemeMode(!isDarkMode)
   );
+}
+
+ensureBudgetState();
+setActiveModule("vefa");
+
+if (openBudgetButton) {
+  openBudgetButton.addEventListener("click", () => {
+    ensureBudgetState();
+    setActiveModule(activeModule === "budget" ? "vefa" : "budget");
+  });
+}
+
+if (budgetImportCsvButton) {
+  budgetImportCsvButton.addEventListener("click", () => {
+    if (budgetCsvInput) {
+      budgetCsvInput.value = "";
+      budgetCsvInput.click();
+    }
+  });
+}
+
+if (budgetCsvInput) {
+  budgetCsvInput.addEventListener("change", (event) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      importTransactionsFromCsv(file);
+    }
+  });
+}
+
+if (budgetExportJsonButton) {
+  budgetExportJsonButton.addEventListener("click", () => exportBudgetJson());
+}
+
+if (budgetImportJsonButton) {
+  budgetImportJsonButton.addEventListener("click", () => {
+    if (budgetJsonInput) {
+      budgetJsonInput.value = "";
+      budgetJsonInput.click();
+    }
+  });
+}
+
+if (budgetJsonInput) {
+  budgetJsonInput.addEventListener("change", (event) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      importBudgetJson(file);
+    }
+  });
+}
+
+if (budgetAddBillForm) {
+  budgetAddBillForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const name = event.target.billName.value.trim();
+    const budget = parseNumber(event.target.billBudget.value) ?? 0;
+    if (!name) {
+      return;
+    }
+    budgetState.bills.push({
+      id: createBudgetId("bill"),
+      name,
+      budget,
+      actual: null,
+      paid: false,
+    });
+    event.target.reset();
+    saveBudgetState();
+    renderBudget();
+  });
+}
+
+if (budgetAddCategoryForm) {
+  budgetAddCategoryForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const name = event.target.categoryName.value.trim();
+    const cap = parseNumber(event.target.categoryCap.value) ?? 0;
+    if (!name) {
+      return;
+    }
+    budgetState.categories.push({
+      id: createBudgetId("cat"),
+      name,
+      cap,
+    });
+    event.target.reset();
+    saveBudgetState();
+    renderBudget();
+  });
+}
+
+if (budgetAddRuleForm) {
+  budgetAddRuleForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const keyword = event.target.ruleKeyword.value.trim();
+    const matchAmount = parseNumber(event.target.ruleAmount.value);
+    const type = event.target.ruleType.value;
+    const targetId = event.target.ruleTarget.value || null;
+    if (!keyword) {
+      return;
+    }
+    budgetState.rules.push({
+      id: createBudgetId("rule"),
+      keyword,
+      matchAmount,
+      type,
+      targetId,
+    });
+    event.target.reset();
+    saveBudgetState();
+    renderBudget();
+  });
+  budgetAddRuleForm.ruleType.addEventListener("change", () =>
+    renderBudgetRuleTargets()
+  );
+}
+
+if (budgetFilter) {
+  budgetFilter.addEventListener("click", (event) => {
+    const button = event.target.closest("button");
+    if (!button) {
+      return;
+    }
+    budgetFilterMode = button.dataset.filter;
+    budgetFilter.querySelectorAll("button").forEach((item) => {
+      item.classList.toggle("is-active", item === button);
+    });
+    renderBudgetTransactions();
+  });
+}
+
+if (budgetAssignType) {
+  budgetAssignType.addEventListener("change", (event) => {
+    updateAssignmentTargets(event.target.value);
+  });
+}
+
+if (budgetAssignForm) {
+  budgetAssignForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const transaction = budgetState.transactions.find(
+      (item) => item.id === activeAssignmentTransactionId
+    );
+    if (!transaction) {
+      return;
+    }
+    const type = budgetAssignType.value;
+    const targetId = budgetAssignTarget.value || null;
+    transaction.tag =
+      type === "unintentional" ? { type } : { type, targetId };
+    saveBudgetState();
+    toggleModal(budgetAssignModal);
+    renderBudget();
+  });
 }
 
 document.addEventListener("pointerdown", (event) => {
