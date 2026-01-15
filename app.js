@@ -2735,6 +2735,7 @@ const importTransactionsFromCsv = (file) => {
     const text = event.target.result;
     const rows = parseCsv(text);
     if (!rows.length) {
+      setStatus("No transactions found in CSV.");
       return;
     }
     const headers = rows[0].map((header) => header.trim().toLowerCase());
@@ -2784,6 +2785,11 @@ const importTransactionsFromCsv = (file) => {
     budgetState.transactions = [...newTransactions, ...budgetState.transactions];
     saveBudgetState();
     renderBudget();
+    if (newTransactions.length) {
+      setStatus(`Imported ${newTransactions.length} transactions.`);
+    } else {
+      setStatus("No new transactions found.");
+    }
   };
   reader.readAsText(file);
 };
@@ -2975,6 +2981,8 @@ if (budgetAddBillForm) {
     event.preventDefault();
     const name = event.target.billName.value.trim();
     const budget = parseNumber(event.target.billBudget.value) ?? 0;
+    const actual = parseNumber(event.target.billActual.value);
+    const paid = event.target.billStatus.value === "paid";
     if (!name) {
       return;
     }
@@ -2982,8 +2990,8 @@ if (budgetAddBillForm) {
       id: createBudgetId("bill"),
       name,
       budget,
-      actual: null,
-      paid: false,
+      actual,
+      paid,
     });
     event.target.reset();
     saveBudgetState();
