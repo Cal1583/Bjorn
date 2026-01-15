@@ -834,7 +834,7 @@ const updateClass = (id, updates, options = {}) => {
 
 const isNoDragTarget = (event) =>
   event.target.closest(
-    'input, textarea, [contenteditable="true"], [data-no-drag="true"]'
+    'input, textarea, button, select, option, [contenteditable="true"], [data-no-drag="true"]'
   );
 
 const isTextInputTarget = (event) =>
@@ -842,7 +842,7 @@ const isTextInputTarget = (event) =>
 
 const isCanvasPanTarget = (event) =>
   !event.target.closest(
-    ".class-node, .mini-toolbar, .view-toolbar, .sidebar, .modal"
+    ".class-node, .mini-toolbar, .view-toolbar, .sidebar, .modal, .budget-view"
   );
 
 const addAttribute = (id) => {
@@ -2457,6 +2457,11 @@ const renderBudgetBills = () => {
       saveBudgetState();
       renderBudget();
     });
+    nameInput.addEventListener("change", () => {
+      applyAutoTagsToTransactions({ onlyUnintentional: true });
+      saveBudgetState();
+      renderBudget();
+    });
     budgetInput.addEventListener("input", (event) => {
       const next = parseNumber(event.target.value);
       bill.budget = next ?? 0;
@@ -2519,6 +2524,11 @@ const renderBudgetCategories = () => {
     const [nameInput, capInput] = row.querySelectorAll("input");
     nameInput.addEventListener("input", (event) => {
       category.name = event.target.value;
+      saveBudgetState();
+      renderBudget();
+    });
+    nameInput.addEventListener("change", () => {
+      applyAutoTagsToTransactions({ onlyUnintentional: true });
       saveBudgetState();
       renderBudget();
     });
@@ -2689,6 +2699,27 @@ const getAutoTagForTransaction = ({ description }) => {
   return { type: "unintentional" };
 };
 
+const applyAutoTagsToTransactions = ({ onlyUnintentional = false } = {}) => {
+  budgetState.transactions.forEach((transaction) => {
+    if (!transaction.description) {
+      return;
+    }
+    if (onlyUnintentional && transaction.tag?.type !== "unintentional") {
+      return;
+    }
+    const nextTag = getAutoTagForTransaction({
+      description: transaction.description,
+    });
+    if (
+      transaction.tag?.type === nextTag.type &&
+      transaction.tag?.targetId === nextTag.targetId
+    ) {
+      return;
+    }
+    transaction.tag = nextTag;
+  });
+};
+
 const parseCsv = (text) => {
   const rows = [];
   let current = [];
@@ -2735,6 +2766,7 @@ const importTransactionsFromCsv = (file) => {
     const text = event.target.result;
     const rows = parseCsv(text);
     if (!rows.length) {
+      setStatus("No transactions found in CSV.");
       return;
     }
     const headers = rows[0].map((header) => header.trim().toLowerCase());
@@ -2782,8 +2814,14 @@ const importTransactionsFromCsv = (file) => {
       return acc;
     }, []);
     budgetState.transactions = [...newTransactions, ...budgetState.transactions];
+    applyAutoTagsToTransactions({ onlyUnintentional: true });
     saveBudgetState();
     renderBudget();
+    if (newTransactions.length) {
+      setStatus(`Imported ${newTransactions.length} transactions.`);
+    } else {
+      setStatus("No new transactions found.");
+    }
   };
   reader.readAsText(file);
 };
@@ -2975,6 +3013,8 @@ if (budgetAddBillForm) {
     event.preventDefault();
     const name = event.target.billName.value.trim();
     const budget = parseNumber(event.target.billBudget.value) ?? 0;
+    const actual = parseNumber(event.target.billActual.value);
+    const paid = event.target.billStatus.value === "paid";
     if (!name) {
       return;
     }
@@ -2982,9 +3022,10 @@ if (budgetAddBillForm) {
       id: createBudgetId("bill"),
       name,
       budget,
-      actual: null,
-      paid: false,
+      actual,
+      paid,
     });
+    applyAutoTagsToTransactions({ onlyUnintentional: true });
     event.target.reset();
     saveBudgetState();
     renderBudget();
@@ -3004,6 +3045,7 @@ if (budgetAddCategoryForm) {
       name,
       cap,
     });
+    applyAutoTagsToTransactions({ onlyUnintentional: true });
     event.target.reset();
     saveBudgetState();
     renderBudget();
