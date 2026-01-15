@@ -130,14 +130,14 @@
               </p>
             </div>
             <div class="budget-actions">
-              <button type="button" id="budget-import-csv">
-                Import bank CSV
-              </button>
               <button type="button" id="budget-export-json">
                 Export budget JSON
               </button>
               <button type="button" id="budget-import-json">
                 Import budget JSON
+              </button>
+              <button type="button" id="budget-import-csv">
+                Import transaction CSV
               </button>
             </div>
           </header>
@@ -194,7 +194,10 @@
                 <button type="submit">Add category</button>
               </form>
             </section>
-            <section class="budget-panel" id="budget-unintentional-panel">
+            <section
+              class="budget-panel budget-panel--wide"
+              id="budget-unintentional-panel"
+            >
               <header class="budget-panel__header">
                 <h2>Unintentional Spending</h2>
               </header>
@@ -213,31 +216,6 @@
                   </button>
                 </div>
               </header>
-              <div class="budget-rules" id="budget-rules">
-                <h3>Auto-tag Rules</h3>
-                <div class="budget-rules__list" id="budget-rules-list"></div>
-                <form class="budget-form budget-form--inline" id="budget-add-rule">
-                  <input
-                    type="text"
-                    name="ruleKeyword"
-                    placeholder="Keyword"
-                    required
-                  />
-                  <input
-                    type="number"
-                    name="ruleAmount"
-                    step="0.01"
-                    placeholder="Amount (optional)"
-                  />
-                  <select name="ruleType">
-                    <option value="bill">Bill</option>
-                    <option value="category">Category</option>
-                    <option value="unintentional">Unintentional</option>
-                  </select>
-                  <select name="ruleTarget" id="budget-rule-target"></select>
-                  <button type="submit">Add rule</button>
-                </form>
-              </div>
               <div
                 class="budget-transactions"
                 id="budget-transactions"
@@ -376,32 +354,6 @@
     <input type="file" id="open-project-input" accept=".json" hidden />
     <input type="file" id="budget-csv-input" accept=".csv" hidden />
     <input type="file" id="budget-json-input" accept=".json" hidden />
-
-    <aside class="modal modal--centered" id="budget-assign-modal" hidden>
-      <div class="modal__header">
-        <h2 class="modal__title">Assign transaction</h2>
-        <div class="modal__actions">
-          <button type="button" data-modal-action="close">Close</button>
-        </div>
-      </div>
-      <div class="modal__body">
-        <form id="budget-assign-form" class="budget-form">
-          <label class="budget-form__field">
-            <span>Assignment</span>
-            <select name="assignType" id="budget-assign-type">
-              <option value="bill">Bill</option>
-              <option value="category">Category</option>
-              <option value="unintentional">Unintentional</option>
-            </select>
-          </label>
-          <label class="budget-form__field" id="budget-assign-target-field">
-            <span>Target</span>
-            <select name="assignTarget" id="budget-assign-target"></select>
-          </label>
-          <button type="submit">Save assignment</button>
-        </form>
-      </div>
-    </aside>
 
     <script src="app.js"></script>
   </body>

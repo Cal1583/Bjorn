@@ -955,6 +955,11 @@ body[data-view="budget"] .mini-toolbar__section--view {
   display: none;
 }
 
+body[data-view="budget"] .mini-toolbar {
+  top: auto;
+  bottom: 1rem;
+}
+
 .budget-header {
   display: flex;
   flex-wrap: wrap;
@@ -1179,7 +1184,7 @@ body[data-view="budget"] .mini-toolbar__section--view {
 
 .budget-transaction {
   display: grid;
-  grid-template-columns: 1.2fr 0.8fr 0.6fr 0.8fr 0.6fr;
+  grid-template-columns: 1.4fr 1.2fr 0.7fr 0.7fr 0.6fr;
   gap: 0.6rem;
   padding: 0.75rem 0.9rem;
   border-radius: 12px;
@@ -1218,36 +1223,32 @@ body[data-view="budget"] .mini-toolbar__section--view {
   text-align: right;
 }
 
+.budget-transaction__assign {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.budget-transaction__assign label {
+  display: grid;
+  gap: 0.2rem;
+  font-size: 0.75rem;
+  color: #667089;
+}
+
+.budget-transaction__assign select,
+.budget-transaction__assign button {
+  width: 100%;
+  padding: 0.45rem 0.6rem;
+  border-radius: 8px;
+  border: 1px solid #c8d1e3;
+  background: #f8f9ff;
+  font: inherit;
+}
+
 .budget-transaction__actions {
   display: flex;
   gap: 0.4rem;
   justify-content: flex-end;
-}
-
-.budget-rules {
-  background: #f5f6fc;
-  border-radius: 12px;
-  padding: 0.9rem;
-  border: 1px solid #e1e6f6;
-  margin-bottom: 1rem;
-}
-
-.budget-rules__list {
-  display: grid;
-  gap: 0.5rem;
-}
-
-.budget-rule {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 0.85rem;
-  color: #5c647c;
-}
-
-.budget-rule button {
-  padding: 0.3rem 0.6rem;
 }
 
 :root[data-theme="dark"] {
@@ -1444,8 +1445,7 @@ body[data-view="budget"] .mini-toolbar__section--view {
 :root[data-theme="dark"] .budget-subtitle,
 :root[data-theme="dark"] .budget-total-card span,
 :root[data-theme="dark"] .budget-row--header,
-:root[data-theme="dark"] .budget-transaction__meta span,
-:root[data-theme="dark"] .budget-rule {
+:root[data-theme="dark"] .budget-transaction__meta span {
   color: #b9c2dd;
 }
 
@@ -1456,6 +1456,8 @@ body[data-view="budget"] .mini-toolbar__section--view {
 :root[data-theme="dark"] .budget-form select,
 :root[data-theme="dark"] .budget-row button,
 :root[data-theme="dark"] .budget-form button,
+:root[data-theme="dark"] .budget-transaction__assign select,
+:root[data-theme="dark"] .budget-transaction__assign button,
 :root[data-theme="dark"] .budget-filter button {
   background: #242b3f;
   border-color: #3a4566;
@@ -1497,9 +1499,4 @@ body[data-view="budget"] .mini-toolbar__section--view {
 
 :root[data-theme="dark"] .budget-transaction__tag {
   color: #d4dbf5;
-}
-
-:root[data-theme="dark"] .budget-rules {
-  background: #20263a;
-  border-color: #2a3147;
 }
