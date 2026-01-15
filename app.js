@@ -834,7 +834,7 @@ const updateClass = (id, updates, options = {}) => {
 
 const isNoDragTarget = (event) =>
   event.target.closest(
-    'input, textarea, [contenteditable="true"], [data-no-drag="true"]'
+    'input, textarea, button, select, option, [contenteditable="true"], [data-no-drag="true"]'
   );
 
 const isTextInputTarget = (event) =>
@@ -842,7 +842,7 @@ const isTextInputTarget = (event) =>
 
 const isCanvasPanTarget = (event) =>
   !event.target.closest(
-    ".class-node, .mini-toolbar, .view-toolbar, .sidebar, .modal"
+    ".class-node, .mini-toolbar, .view-toolbar, .sidebar, .modal, .budget-view"
   );
 
 const addAttribute = (id) => {
