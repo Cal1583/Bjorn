@@ -3,248 +3,180 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Vefa</title>
+    <title>VEFA Budget Maker</title>
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
     <div class="app-layout">
       <aside class="sidebar">
         <div class="sidebar__brand">
-          <span class="sidebar__app-name">Vefa</span>
+          <span class="sidebar__app-name">VEFA Budget Maker</span>
         </div>
         <div class="sidebar__section">
-          <button id="new-project">New project</button>
+          <button id="new-project">New</button>
           <button id="open-project">Open...</button>
           <button id="save-project">Save</button>
           <button id="save-project-as">Save as...</button>
-          <button id="open-model">Model view</button>
-          <button id="open-colors">Edit colors</button>
         </div>
         <div class="sidebar__section">
-          <button id="add-class">Add Class</button>
-          <button id="add-subclass">Add Subclass</button>
-          <button id="create-instance">Create Instance</button>
-          <button id="create-core-instance">Create Core</button>
-          <button id="create-half-core">Create Half-Core</button>
+          <p class="sidebar__label">Workspace</p>
+          <button id="import-csv">Import CSV</button>
+          <button id="export-budget">Export budget JSON</button>
+          <button id="import-budget">Import budget JSON</button>
         </div>
         <div class="sidebar__section">
-          <p class="sidebar__label">Set relationship</p>
-          <div class="relationship-buttons" id="relationship-buttons">
-            <button
-              type="button"
-              data-relationship-type="one-to-many"
-              title="Set a one-to-many relationship"
-            >
-              1 → *
-            </button>
-            <button
-              type="button"
-              data-relationship-type="many-to-many"
-              title="Set a many-to-many relationship"
-            >
-              * ↔ *
-            </button>
-            <button
-              type="button"
-              data-relationship-type="parent-child"
-              title="Set a parent-child relationship"
-            >
-              ⤴
-            </button>
-          </div>
+          <p class="sidebar__label">Status</p>
+          <div class="sidebar__status" id="status">Ready to import statements.</div>
         </div>
-        <hr class="sidebar__divider" />
-        <div class="sidebar__section">
-          <p class="sidebar__label">Templates</p>
-          <div class="template-list" id="template-list"></div>
-          <p class="template-empty" id="template-empty">
-            Right-click a class to save it here.
-          </p>
-        </div>
-        <div class="sidebar__section">
-          <button id="open-legend">Legend</button>
-        </div>
-        <div class="sidebar__status" id="status"></div>
       </aside>
 
-      <main class="canvas" id="canvas">
-        <div class="mini-toolbar">
-          <div class="mini-toolbar__section mini-toolbar__section--primary">
+      <main class="main">
+        <header class="topbar">
+          <div class="topbar__left">
             <input
               id="search-input"
               type="search"
-              placeholder="Search classes..."
+              placeholder="Search transactions..."
               autocomplete="off"
             />
-            <button id="undo-action" type="button">Undo</button>
-            <button id="redo-action" type="button">Redo</button>
+            <div class="topbar__controls">
+              <label class="control">
+                <span>Starting balance</span>
+                <input id="starting-balance" type="number" step="0.01" />
+              </label>
+            </div>
           </div>
-        </div>
-        <div class="view-toolbar">
-          <div class="mini-toolbar__section mini-toolbar__section--view">
-            <span class="view-toolbar__zoom" id="zoom-display">100%</span>
-            <button
-              id="view-options-toggle"
-              type="button"
-              aria-expanded="false"
-              aria-controls="view-options"
-            >
-              View options
-            </button>
-            <div class="view-options" id="view-options" hidden>
-              <span class="mini-toolbar__label">View</span>
-              <div class="view-options__buttons">
-                <button id="fit-to-screen" type="button">Fit to screen</button>
-                <button id="grid-toggle" type="button" aria-pressed="false">
-                  Grid toggle
-                </button>
-                <button id="snap-toggle" type="button" aria-pressed="false">
-                  Snap toggle
-                </button>
-                <button id="view-definitions" type="button">Definitions</button>
-                <button
-                  id="theme-toggle"
-                  type="button"
-                  aria-pressed="false"
-                >
-                  Dark mode
-                </button>
+          <div class="topbar__right">
+            <button id="theme-toggle" type="button">Dark mode</button>
+          </div>
+        </header>
+
+        <section class="dashboard">
+          <div class="card card--wide">
+            <div class="card__header">
+              <h2>Quick Totals</h2>
+            </div>
+            <div class="quick-totals">
+              <div class="quick-totals__item">
+                <span class="label">Loaded Txns (month)</span>
+                <span class="value" id="total-transactions">0</span>
+              </div>
+              <div class="quick-totals__item">
+                <span class="label">Bills Remaining</span>
+                <span class="value" id="bills-remaining">$0</span>
+              </div>
+              <div class="quick-totals__item">
+                <span class="label">Remaining Balance</span>
+                <span class="value" id="remaining-balance">$0</span>
               </div>
             </div>
           </div>
-        </div>
-        <div class="canvas__content" id="canvas-content">
-          <svg class="canvas__lines" id="relationship-lines"></svg>
-        </div>
+
+          <div class="card">
+            <div class="card__header">
+              <h2>Fixed Bills Status</h2>
+            </div>
+            <div class="table" id="fixed-bills-table"></div>
+          </div>
+
+          <div class="card">
+            <div class="card__header">
+              <h2>Running Categories</h2>
+            </div>
+            <div class="table" id="running-categories-table"></div>
+          </div>
+
+          <div class="card card--wide">
+            <div class="card__header">
+              <h2>Unintentional Spending (This Month)</h2>
+            </div>
+            <div class="unintentional">
+              <div class="unintentional__summary">
+                <span class="label">Total</span>
+                <span class="value" id="unintentional-total">$0</span>
+              </div>
+              <div class="unintentional__list" id="unintentional-list"></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="lower">
+          <div class="card card--wide">
+            <div class="card__header card__header--split">
+              <div>
+                <h2>Transaction Review</h2>
+                <p class="muted">Assign or confirm auto-tags. Reviewed transactions are shaded.</p>
+              </div>
+              <div class="filters">
+                <button class="filter is-active" data-filter="all">All</button>
+                <button class="filter" data-filter="reviewed">Reviewed</button>
+                <button class="filter" data-filter="unreviewed">Unreviewed</button>
+              </div>
+            </div>
+            <div class="table" id="transaction-table"></div>
+          </div>
+
+          <div class="card">
+            <div class="card__header">
+              <h2>Budget Config</h2>
+            </div>
+            <div class="config">
+              <div class="config__section">
+                <div class="config__header">
+                  <h3>Fixed Bills</h3>
+                  <button class="ghost" id="add-bill">Add Bill</button>
+                </div>
+                <div class="table" id="config-bills"></div>
+              </div>
+              <div class="config__section">
+                <div class="config__header">
+                  <h3>Running Categories</h3>
+                  <button class="ghost" id="add-category">Add Category</button>
+                </div>
+                <div class="table" id="config-categories"></div>
+              </div>
+            </div>
+          </div>
+        </section>
       </main>
     </div>
 
-    <aside class="modal" id="model-modal" hidden>
-      <div class="modal__header" data-drag-handle="true">
-        <h2 class="modal__title">Model JSON</h2>
-        <div class="modal__actions">
-          <button type="button" data-modal-action="close">Close</button>
+    <div class="modal" id="assign-modal" aria-hidden="true">
+      <div class="modal__content">
+        <div class="modal__header">
+          <h3>Assign transaction</h3>
+          <button class="icon" id="close-assign">✕</button>
         </div>
-      </div>
-      <div class="modal__body">
-        <textarea id="export-output" readonly></textarea>
-      </div>
-    </aside>
-
-    <aside class="modal" id="legend-modal" hidden>
-      <div class="modal__header" data-drag-handle="true">
-        <h2 class="modal__title">Schema color legend</h2>
-        <div class="modal__actions">
-          <button type="button" data-modal-action="close">Close</button>
-        </div>
-      </div>
-      <div class="modal__body">
-        <div class="legend-list">
-          <span class="legend-item">
-            <span class="legend-swatch legend-swatch--class" aria-hidden="true"></span>
-            Class
-          </span>
-          <span class="legend-item">
-            <span class="legend-swatch legend-swatch--id" aria-hidden="true"></span>
-            Id
-          </span>
-          <span class="legend-item">
-            <span class="legend-swatch legend-swatch--attribute" aria-hidden="true"></span>
-            Attribute
-          </span>
-          <span class="legend-item">
-            <span class="legend-swatch legend-swatch--relationship" aria-hidden="true"></span>
-            Relationship
-          </span>
-        </div>
-      </div>
-    </aside>
-
-    <aside class="modal" id="colors-modal" hidden>
-      <div class="modal__header" data-drag-handle="true">
-        <h2 class="modal__title">Edit schema colors</h2>
-        <div class="modal__actions">
-          <button type="button" data-modal-action="close">Close</button>
-        </div>
-      </div>
-      <div class="modal__body">
-        <form id="colors-form" class="colors-form">
-          <label class="colors-form__row">
-            <span>Class</span>
-            <input name="class" type="text" placeholder="#3f9aae" />
-            <span class="colors-form__swatch" data-color-preview="class"></span>
-          </label>
-          <label class="colors-form__row">
-            <span>Subclass</span>
-            <input name="subclass" type="text" placeholder="#5d76d3" />
-            <span
-              class="colors-form__swatch"
-              data-color-preview="subclass"
-            ></span>
-          </label>
-          <label class="colors-form__row">
-            <span>Instance</span>
-            <input name="instance" type="text" placeholder="#6c7dd6" />
-            <span
-              class="colors-form__swatch"
-              data-color-preview="instance"
-            ></span>
-          </label>
-          <label class="colors-form__row">
-            <span>Core instance</span>
-            <input name="core-instance" type="text" placeholder="#8f6bd9" />
-            <span
-              class="colors-form__swatch"
-              data-color-preview="core-instance"
-            ></span>
-          </label>
-          <label class="colors-form__row">
-            <span>Attribute</span>
-            <input name="attribute" type="text" placeholder="#79c9c5" />
-            <span class="colors-form__swatch" data-color-preview="attribute"></span>
-          </label>
-          <label class="colors-form__row">
-            <span>Id</span>
-            <input name="id" type="text" placeholder="#ffe2af" />
-            <span class="colors-form__swatch" data-color-preview="id"></span>
-          </label>
-          <label class="colors-form__row">
-            <span>Relationship</span>
-            <input name="relationship" type="text" placeholder="#f96e5b" />
-            <span class="colors-form__swatch" data-color-preview="relationship"></span>
-          </label>
-          <p class="colors-form__error" id="colors-error" role="alert"></p>
-          <div class="colors-form__actions">
-            <button type="submit">Apply colors</button>
+        <div class="modal__body">
+          <p class="muted" id="assign-description"></p>
+          <div class="assign-options">
+            <label class="radio">
+              <input type="radio" name="assign-type" value="bill" checked />
+              Fixed Bill
+            </label>
+            <label class="radio">
+              <input type="radio" name="assign-type" value="category" />
+              Running Category
+            </label>
+            <label class="radio">
+              <input type="radio" name="assign-type" value="unintentional" />
+              Unintentional
+            </label>
           </div>
-        </form>
+          <label class="control">
+            <span>Assignment target</span>
+            <select id="assign-target"></select>
+          </label>
+        </div>
+        <div class="modal__footer">
+          <button class="ghost" id="cancel-assign">Cancel</button>
+          <button class="primary" id="save-assign">Save</button>
+        </div>
       </div>
-    </aside>
+    </div>
 
-    <aside class="modal modal--centered" id="class-modal" hidden>
-      <div class="modal__header">
-        <h2 class="modal__title">Add class</h2>
-      </div>
-      <div class="modal__body">
-        <form id="class-form" class="class-form">
-          <label class="class-form__label" for="class-name">Class title</label>
-          <input
-            id="class-name"
-            name="className"
-            type="text"
-            placeholder="Enter class title"
-            autocomplete="off"
-          />
-          <p class="class-form__error" id="class-error" role="alert"></p>
-          <div class="class-form__actions">
-            <button type="submit">Add class</button>
-            <button type="button" id="class-cancel">Close</button>
-          </div>
-        </form>
-      </div>
-    </aside>
-
-    <input type="file" id="open-project-input" accept=".json" hidden />
+    <input id="csv-input" type="file" accept=".csv" hidden />
+    <input id="budget-input" type="file" accept="application/json" hidden />
 
     <script src="app.js"></script>
   </body>
