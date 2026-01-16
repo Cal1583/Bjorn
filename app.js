@@ -62,6 +62,8 @@ const budgetFilter = document.getElementById("budget-filter");
 const budgetImportCsvButton = document.getElementById("budget-import-csv");
 const budgetExportJsonButton = document.getElementById("budget-export-json");
 const budgetImportJsonButton = document.getElementById("budget-import-json");
+const budgetNewSidebarButton = document.getElementById("budget-new-sidebar");
+const budgetMainMenuButton = document.getElementById("budget-main-menu");
 const budgetCsvInput = document.getElementById("budget-csv-input");
 const budgetJsonInput = document.getElementById("budget-json-input");
 const budgetAddBillForm = document.getElementById("budget-add-bill");
@@ -3119,6 +3121,20 @@ if (budgetNewButton) {
   });
 }
 
+if (budgetNewSidebarButton) {
+  budgetNewSidebarButton.addEventListener("click", () => {
+    budgetState = getBudgetDefaults();
+    saveBudgetState();
+    navigateToPath("/budget");
+  });
+}
+
+if (budgetMainMenuButton) {
+  budgetMainMenuButton.addEventListener("click", () =>
+    navigateToPath("/")
+  );
+}
+
 if (budgetImportCsvButton) {
   budgetImportCsvButton.addEventListener("click", () => {
     if (budgetCsvInput) {
@@ -3375,9 +3391,11 @@ canvas.addEventListener("pointerdown", (event) => {
 
 canvas.addEventListener("scroll", renderLines);
 canvas.addEventListener("wheel", (event) => {
-  event.preventDefault();
-  const direction = event.deltaY > 0 ? -1 : 1;
-  adjustZoom(direction);
+  if (event.ctrlKey || event.metaKey) {
+    event.preventDefault();
+    const direction = event.deltaY > 0 ? -1 : 1;
+    adjustZoom(direction);
+  }
 });
 
 canvas.addEventListener("click", (event) => {
