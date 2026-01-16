@@ -2385,6 +2385,28 @@ const normalizePathname = (pathname) => {
   return pathname;
 };
 
+const getPathFromHash = (hash) => {
+  if (!hash) {
+    return "";
+  }
+  const trimmed = hash.startsWith("#") ? hash.slice(1) : hash;
+  if (!trimmed) {
+    return "/";
+  }
+  return trimmed.startsWith("/") ? trimmed : `/${trimmed}`;
+};
+
+const getPathFromLocation = () => {
+  const hashPath = getPathFromHash(window.location.hash);
+  if (hashPath) {
+    return hashPath;
+  }
+  if (window.location.protocol === "file:") {
+    return "/";
+  }
+  return window.location.pathname;
+};
+
 const getModuleFromPath = (pathname) => {
   const normalized = normalizePathname(pathname);
   if (normalized === "/budget") {
@@ -2398,6 +2420,14 @@ const getModuleFromPath = (pathname) => {
 
 const navigateToPath = (path) => {
   const normalized = normalizePathname(path);
+  if (window.location.protocol === "file:") {
+    const nextHash = `#${normalized}`;
+    if (window.location.hash !== nextHash) {
+      window.location.hash = nextHash;
+    }
+    setActiveModule(getModuleFromPath(normalized));
+    return;
+  }
   if (window.location.pathname !== normalized) {
     window.history.pushState({}, "", normalized);
   }
@@ -3050,9 +3080,16 @@ if (themeToggleButtons.length) {
   });
 }
 
-setActiveModule(getModuleFromPath(window.location.pathname));
+const syncModuleWithLocation = () => {
+  setActiveModule(getModuleFromPath(getPathFromLocation()));
+};
+
+syncModuleWithLocation();
 window.addEventListener("popstate", () => {
-  setActiveModule(getModuleFromPath(window.location.pathname));
+  syncModuleWithLocation();
+});
+window.addEventListener("hashchange", () => {
+  syncModuleWithLocation();
 });
 
 if (openBudgetButton) {
