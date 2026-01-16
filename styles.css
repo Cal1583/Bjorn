@@ -258,13 +258,9 @@ body[data-view="budget"] .sidebar {
 }
 
 .budget-sidebar-panels {
-  display: none;
+  display: flex;
   flex-direction: column;
   gap: 0.9rem;
-}
-
-body[data-view="budget"] .budget-sidebar-panels {
-  display: flex;
 }
 
 .template-list {
@@ -1261,6 +1257,13 @@ body[data-view="budget"] .mini-toolbar {
   cursor: pointer;
 }
 
+.budget-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 1.25rem;
+  align-items: start;
+}
+
 .budget-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1286,6 +1289,46 @@ body[data-view="budget"] .mini-toolbar {
 
 .budget-panel--sidebar {
   padding: 0.9rem 1rem;
+}
+
+.budget-transactions-sidebar {
+  position: sticky;
+  top: 2rem;
+  height: calc(100vh - 4rem);
+  align-self: start;
+}
+
+.budget-transactions-sidebar__inner {
+  background: #ffffff;
+  border-radius: 16px;
+  border: 1px solid #e4e7ef;
+  box-shadow: 0 14px 28px rgba(31, 36, 48, 0.08);
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+
+.budget-transactions-sidebar__header {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 1rem 1.25rem;
+  background: #ffffff;
+  border-bottom: 1px solid #e4e7ef;
+}
+
+.budget-transactions-sidebar__header h2 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.budget-transactions-sidebar__content {
+  flex: 1;
+  padding: 1rem 1.25rem 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
 }
 
 .budget-header {
@@ -1685,6 +1728,15 @@ body[data-view="budget"] .mini-toolbar {
     padding: 1.5rem;
   }
 
+  .budget-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .budget-transactions-sidebar {
+    position: static;
+    height: auto;
+  }
+
   .budget-grid {
     grid-template-columns: minmax(0, 1fr);
     grid-template-areas:
@@ -1960,6 +2012,17 @@ body[data-view="budget"] .mini-toolbar {
   background: #1a2031;
   border-color: #2a3147;
   box-shadow: 0 16px 32px rgba(5, 8, 16, 0.45);
+}
+
+:root[data-theme="dark"] .budget-transactions-sidebar__inner {
+  background: #1a2031;
+  border-color: #2a3147;
+  box-shadow: 0 16px 32px rgba(5, 8, 16, 0.45);
+}
+
+:root[data-theme="dark"] .budget-transactions-sidebar__header {
+  background: #1a2031;
+  border-bottom-color: #2a3147;
 }
 
 :root[data-theme="dark"] .budget-total-card {

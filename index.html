@@ -60,56 +60,6 @@
           </button>
           <hr class="sidebar__divider sidebar__divider--budget" />
           <div class="sidebar__budget-tools" id="budget-tools"></div>
-          <div class="budget-sidebar-panels">
-            <section class="budget-panel budget-panel--sidebar" id="budget-transactions-panel">
-              <header class="budget-panel__header">
-                <h2>Credits &amp; Transfers</h2>
-              </header>
-              <div class="budget-table" id="budget-transactions-summary"></div>
-              <form
-                class="budget-form budget-form--inline"
-                id="budget-add-transaction"
-              >
-                <input
-                  type="text"
-                  name="transactionPayee"
-                  placeholder="Payee"
-                  required
-                />
-                <input
-                  type="number"
-                  name="transactionAmount"
-                  step="0.01"
-                  placeholder="Amount"
-                  required
-                />
-                <select name="transactionType" required>
-                  <option value="Credit">Credit</option>
-                  <option value="Transfer">Transfer</option>
-                </select>
-                <input type="date" name="transactionDate" />
-                <button type="submit">Add transfer/credit</button>
-              </form>
-            </section>
-            <section class="budget-panel budget-panel--sidebar" id="budget-review-panel">
-              <header class="budget-panel__header">
-                <h2>Transaction Review</h2>
-                <div class="budget-filter" id="budget-filter">
-                  <button type="button" data-filter="all" class="is-active">
-                    All
-                  </button>
-                  <button type="button" data-filter="reviewed">Reviewed</button>
-                  <button type="button" data-filter="unreviewed">
-                    Unreviewed
-                  </button>
-                </div>
-              </header>
-              <div
-                class="budget-transactions"
-                id="budget-transactions"
-              ></div>
-            </section>
-          </div>
         </div>
         <div class="sidebar__section sidebar__section--vefa">
           <button id="new-project" data-tooltip="Start a new class model.">
@@ -311,100 +261,172 @@
           <svg class="canvas__lines" id="relationship-lines"></svg>
         </div>
         <section class="budget-view" id="budget-view" hidden>
-          <div class="budget-grid">
-            <header class="budget-header">
-              <div>
-                <p class="budget-eyebrow">VEFA Module</p>
-                <h1>Budget</h1>
-                <p class="budget-subtitle">
-                  Track monthly bills, category caps, and transaction review.
-                </p>
-              </div>
-              <div class="budget-net-balance" id="budget-net-balance">
-                <span>Net balance</span>
-                <strong>$0.00</strong>
-              </div>
-            </header>
-            <section class="budget-panel" id="budget-totals-panel">
-              <header class="budget-panel__header">
-                <h2>Quick Totals</h2>
-              </header>
-              <div class="budget-totals" id="budget-totals"></div>
-            </section>
-            <section class="budget-panel" id="budget-bills-panel">
-              <header class="budget-panel__header">
-                <h2>Fixed Bills Status</h2>
-              </header>
-              <div class="budget-table" id="budget-bills-table"></div>
-              <form class="budget-form budget-form--bills" id="budget-add-bill">
-                <input
-                  type="text"
-                  name="billName"
-                  placeholder="New bill name"
-                  required
-                />
-                <input
-                  type="number"
-                  name="billBudget"
-                  step="0.01"
-                  min="0"
-                  placeholder="Budget"
-                  required
-                />
-                <input
-                  type="number"
-                  name="billActual"
-                  step="0.01"
-                  min="0"
-                  placeholder="Actual"
-                />
-                <select name="billStatus">
-                  <option value="unpaid" selected>Unpaid</option>
-                  <option value="paid">Paid</option>
-                </select>
-                <button type="submit">Add bill</button>
-              </form>
-            </section>
-            <section class="budget-panel" id="budget-categories-panel">
-              <header class="budget-panel__header">
-                <h2>Running Categories</h2>
-                <div class="budget-panel__actions">
-                  <button type="button" id="budget-collapse-categories">
-                    Collapse all
-                  </button>
-                  <button type="button" id="budget-expand-categories">
-                    Expand all
-                  </button>
+          <div class="budget-layout">
+            <div class="budget-grid">
+              <header class="budget-header">
+                <div>
+                  <p class="budget-eyebrow">VEFA Module</p>
+                  <h1>Budget</h1>
+                  <p class="budget-subtitle">
+                    Track monthly bills, category caps, and transaction review.
+                  </p>
+                </div>
+                <div class="budget-net-balance" id="budget-net-balance">
+                  <span>Net balance</span>
+                  <strong>$0.00</strong>
                 </div>
               </header>
-              <div class="budget-table" id="budget-categories-table"></div>
-              <form class="budget-form" id="budget-add-category">
-                <input
-                  type="text"
-                  name="categoryName"
-                  placeholder="New category"
-                  required
-                />
-                <input
-                  type="number"
-                  name="categoryCap"
-                  step="0.01"
-                  min="0"
-                  placeholder="Cap"
-                  required
-                />
-                <button type="submit">Add category</button>
-              </form>
-            </section>
-            <section
-              class="budget-panel budget-panel--wide"
-              id="budget-unintentional-panel"
-            >
-              <header class="budget-panel__header">
-                <h2>Unintentional Spending</h2>
-              </header>
-              <div class="budget-unintentional" id="budget-unintentional"></div>
-            </section>
+              <section class="budget-panel" id="budget-totals-panel">
+                <header class="budget-panel__header">
+                  <h2>Quick Totals</h2>
+                </header>
+                <div class="budget-totals" id="budget-totals"></div>
+              </section>
+              <section class="budget-panel" id="budget-bills-panel">
+                <header class="budget-panel__header">
+                  <h2>Fixed Bills Status</h2>
+                </header>
+                <div class="budget-table" id="budget-bills-table"></div>
+                <form class="budget-form budget-form--bills" id="budget-add-bill">
+                  <input
+                    type="text"
+                    name="billName"
+                    placeholder="New bill name"
+                    required
+                  />
+                  <input
+                    type="number"
+                    name="billBudget"
+                    step="0.01"
+                    min="0"
+                    placeholder="Budget"
+                    required
+                  />
+                  <input
+                    type="number"
+                    name="billActual"
+                    step="0.01"
+                    min="0"
+                    placeholder="Actual"
+                  />
+                  <select name="billStatus">
+                    <option value="unpaid" selected>Unpaid</option>
+                    <option value="paid">Paid</option>
+                  </select>
+                  <button type="submit">Add bill</button>
+                </form>
+              </section>
+              <section class="budget-panel" id="budget-categories-panel">
+                <header class="budget-panel__header">
+                  <h2>Running Categories</h2>
+                  <div class="budget-panel__actions">
+                    <button type="button" id="budget-collapse-categories">
+                      Collapse all
+                    </button>
+                    <button type="button" id="budget-expand-categories">
+                      Expand all
+                    </button>
+                  </div>
+                </header>
+                <div class="budget-table" id="budget-categories-table"></div>
+                <form class="budget-form" id="budget-add-category">
+                  <input
+                    type="text"
+                    name="categoryName"
+                    placeholder="New category"
+                    required
+                  />
+                  <input
+                    type="number"
+                    name="categoryCap"
+                    step="0.01"
+                    min="0"
+                    placeholder="Cap"
+                    required
+                  />
+                  <button type="submit">Add category</button>
+                </form>
+              </section>
+              <section
+                class="budget-panel budget-panel--wide"
+                id="budget-unintentional-panel"
+              >
+                <header class="budget-panel__header">
+                  <h2>Unintentional Spending</h2>
+                </header>
+                <div class="budget-unintentional" id="budget-unintentional"></div>
+              </section>
+            </div>
+            <aside class="budget-transactions-sidebar" id="budget-transactions-sidebar">
+              <div class="budget-transactions-sidebar__inner">
+                <header class="budget-transactions-sidebar__header">
+                  <h2>Transactions</h2>
+                </header>
+                <div class="budget-transactions-sidebar__content">
+                  <div class="budget-sidebar-panels">
+                    <section
+                      class="budget-panel budget-panel--sidebar"
+                      id="budget-transactions-panel"
+                    >
+                      <header class="budget-panel__header">
+                        <h2>Credits &amp; Transfers</h2>
+                      </header>
+                      <div
+                        class="budget-table"
+                        id="budget-transactions-summary"
+                      ></div>
+                      <form
+                        class="budget-form budget-form--inline"
+                        id="budget-add-transaction"
+                      >
+                        <input
+                          type="text"
+                          name="transactionPayee"
+                          placeholder="Payee"
+                          required
+                        />
+                        <input
+                          type="number"
+                          name="transactionAmount"
+                          step="0.01"
+                          placeholder="Amount"
+                          required
+                        />
+                        <select name="transactionType" required>
+                          <option value="Credit">Credit</option>
+                          <option value="Transfer">Transfer</option>
+                        </select>
+                        <input type="date" name="transactionDate" />
+                        <button type="submit">Add transfer/credit</button>
+                      </form>
+                    </section>
+                    <section
+                      class="budget-panel budget-panel--sidebar"
+                      id="budget-review-panel"
+                    >
+                      <header class="budget-panel__header">
+                        <h2>Transaction Review</h2>
+                        <div class="budget-filter" id="budget-filter">
+                          <button type="button" data-filter="all" class="is-active">
+                            All
+                          </button>
+                          <button type="button" data-filter="reviewed">
+                            Reviewed
+                          </button>
+                          <button type="button" data-filter="unreviewed">
+                            Unreviewed
+                          </button>
+                        </div>
+                      </header>
+                      <div
+                        class="budget-transactions"
+                        id="budget-transactions"
+                      ></div>
+                    </section>
+                  </div>
+                </div>
+              </div>
+            </aside>
           </div>
         </section>
       </main>
