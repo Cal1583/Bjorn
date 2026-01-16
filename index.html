@@ -25,6 +25,27 @@
           </button>
           <button
             type="button"
+            id="workspace-save-sidebar"
+            data-tooltip="Save the current workspace."
+          >
+            Save workspace
+          </button>
+          <button
+            type="button"
+            id="workspace-export-sidebar"
+            data-tooltip="Export the current workspace as JSON."
+          >
+            Export workspace
+          </button>
+          <button
+            type="button"
+            id="workspace-open"
+            data-tooltip="Open the workspace picker."
+          >
+            Workspace...
+          </button>
+          <button
+            type="button"
             id="budget-main-menu"
             data-tooltip="Return to the main menu."
           >
@@ -564,13 +585,47 @@
       <div class="modal__body">
         <div class="budget-selector">
           <button class="budget-selector__new" type="button" id="budget-new">
-            Start new budget
+            Start new workspace
           </button>
+          <div class="budget-selector__actions">
+            <div class="budget-selector__row">
+              <input
+                class="budget-selector__input"
+                id="workspace-name"
+                type="text"
+                placeholder="Workspace name"
+                autocomplete="off"
+              />
+              <button
+                class="budget-selector__action-button"
+                type="button"
+                id="workspace-save"
+              >
+                Save workspace
+              </button>
+            </div>
+            <div class="budget-selector__row">
+              <button
+                class="budget-selector__action-button"
+                type="button"
+                id="workspace-import"
+              >
+                Import workspace
+              </button>
+              <button
+                class="budget-selector__action-button"
+                type="button"
+                id="workspace-export"
+              >
+                Export workspace
+              </button>
+            </div>
+          </div>
           <div class="budget-selector__existing">
-            <p class="budget-selector__label">Existing budgets</p>
+            <p class="budget-selector__label">Existing workspaces</p>
             <div class="budget-selector__list" id="budget-selector-list"></div>
             <p class="template-empty" id="budget-selector-empty">
-              No saved budgets yet.
+              No saved workspaces yet.
             </p>
           </div>
         </div>
@@ -580,6 +635,7 @@
     <input type="file" id="open-project-input" accept=".json" hidden />
     <input type="file" id="budget-csv-input" accept=".csv" hidden />
     <input type="file" id="budget-json-input" accept=".json" hidden />
+    <input type="file" id="workspace-json-input" accept=".json" hidden />
 
     <script src="app.js"></script>
   </body>

@@ -54,6 +54,10 @@ const openClassBuilderButton = document.getElementById("open-class-builder");
 const openBudgetBuilderButton = document.getElementById("open-budget-builder");
 const budgetModal = document.getElementById("budget-modal");
 const budgetNewButton = document.getElementById("budget-new");
+const workspaceNameInput = document.getElementById("workspace-name");
+const workspaceSaveButton = document.getElementById("workspace-save");
+const workspaceImportButton = document.getElementById("workspace-import");
+const workspaceExportButton = document.getElementById("workspace-export");
 const budgetSelectorList = document.getElementById("budget-selector-list");
 const budgetSelectorEmpty = document.getElementById("budget-selector-empty");
 const budgetTotals = document.getElementById("budget-totals");
@@ -69,9 +73,15 @@ const budgetImportCsvButton = document.getElementById("budget-import-csv");
 const budgetExportJsonButton = document.getElementById("budget-export-json");
 const budgetImportJsonButton = document.getElementById("budget-import-json");
 const budgetNewSidebarButton = document.getElementById("budget-new-sidebar");
+const workspaceSaveSidebarButton = document.getElementById("workspace-save-sidebar");
+const workspaceExportSidebarButton = document.getElementById(
+  "workspace-export-sidebar"
+);
+const workspaceOpenButton = document.getElementById("workspace-open");
 const budgetMainMenuButton = document.getElementById("budget-main-menu");
 const budgetCsvInput = document.getElementById("budget-csv-input");
 const budgetJsonInput = document.getElementById("budget-json-input");
+const workspaceJsonInput = document.getElementById("workspace-json-input");
 const budgetAddBillForm = document.getElementById("budget-add-bill");
 const budgetAddCategoryForm = document.getElementById("budget-add-category");
 const budgetAddTransactionForm = document.getElementById("budget-add-transaction");
@@ -115,6 +125,8 @@ let multiGrabState = null;
 let lastPointerPosition = null;
 let activeModule = "vefa";
 let budgetState = null;
+let activeWorkspaceId = null;
+let activeWorkspace = null;
 let budgetFilterMode = "all";
 let budgetSearchQuery = "";
 let tooltipsEnabled = true;
@@ -2282,6 +2294,10 @@ if (createHalfCoreButton) {
 }
 
 const budgetStorageKey = "vefa-budget-data-v1";
+const workspaceIndexKey = "bjorn.workspaces.index.v1";
+const workspaceItemKey = (id) => `bjorn.workspaces.item.v1.${id}`;
+const workspaceSchemaVersion = 1;
+const workspaceType = "bjorn-workspace";
 const tooltipsStorageKey = "vefa-tooltips-enabled";
 
 const createBudgetId = (prefix) =>
@@ -2408,6 +2424,125 @@ const sanitizeBudgetState = (state) => ({
   transactions: Array.isArray(state?.transactions) ? state.transactions : [],
 });
 
+const createWorkspaceId = () =>
+  `ws-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+const normalizeWorkspaceBudget = (budget, transactions) =>
+  sanitizeBudgetState({
+    bills: budget?.bills,
+    categories: budget?.categories,
+    rules: budget?.rules,
+    transactions: Array.isArray(transactions) ? transactions : [],
+  });
+
+const createWorkspace = ({
+  id,
+  name,
+  savedAt,
+  budget,
+  transactions,
+  ui,
+} = {}) => {
+  const normalized = normalizeWorkspaceBudget(budget, transactions);
+  return {
+    schemaVersion: workspaceSchemaVersion,
+    type: workspaceType,
+    id: id || createWorkspaceId(),
+    name: name || "Untitled workspace",
+    savedAt: savedAt || new Date().toISOString(),
+    budget: {
+      bills: normalized.bills,
+      categories: normalized.categories,
+      rules: normalized.rules,
+    },
+    transactions: normalized.transactions,
+    ui: {
+      budgetFilterMode: ui?.budgetFilterMode || "all",
+      budgetSearchQuery: ui?.budgetSearchQuery || "",
+      collapsedCategoryIds: Array.isArray(ui?.collapsedCategoryIds)
+        ? ui.collapsedCategoryIds
+        : [],
+    },
+  };
+};
+
+const normalizeWorkspace = (workspace) => {
+  if (!workspace) {
+    return null;
+  }
+  if (
+    workspace.type !== workspaceType ||
+    workspace.schemaVersion !== workspaceSchemaVersion
+  ) {
+    return null;
+  }
+  return createWorkspace({
+    id: workspace.id,
+    name: workspace.name,
+    savedAt: workspace.savedAt,
+    budget: workspace.budget,
+    transactions: workspace.transactions,
+    ui: workspace.ui,
+  });
+};
+
+const getWorkspaceIndex = () => {
+  if (!window.localStorage) {
+    return [];
+  }
+  const stored = localStorage.getItem(workspaceIndexKey);
+  if (!stored) {
+    return [];
+  }
+  try {
+    const parsed = JSON.parse(stored);
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+    return parsed.filter(
+      (entry) => entry && entry.id && entry.name && entry.savedAt
+    );
+  } catch (error) {
+    return [];
+  }
+};
+
+const saveWorkspaceIndex = (index) => {
+  if (!window.localStorage) {
+    return;
+  }
+  localStorage.setItem(workspaceIndexKey, JSON.stringify(index));
+};
+
+const listWorkspaces = () => {
+  const index = getWorkspaceIndex();
+  return index.sort(
+    (a, b) => new Date(b.savedAt).getTime() - new Date(a.savedAt).getTime()
+  );
+};
+
+const readWorkspaceItem = (id) => {
+  if (!window.localStorage) {
+    return null;
+  }
+  const stored = localStorage.getItem(workspaceItemKey(id));
+  if (!stored) {
+    return null;
+  }
+  try {
+    return normalizeWorkspace(JSON.parse(stored));
+  } catch (error) {
+    return null;
+  }
+};
+
+const persistWorkspaceItem = (workspace) => {
+  if (!window.localStorage || !workspace?.id) {
+    return;
+  }
+  localStorage.setItem(workspaceItemKey(workspace.id), JSON.stringify(workspace));
+};
+
 const loadBudgetState = () => {
   if (!window.localStorage) {
     return getBudgetDefaults();
@@ -2423,18 +2558,8 @@ const loadBudgetState = () => {
   }
 };
 
-const saveBudgetState = () => {
-  if (!window.localStorage) {
-    return;
-  }
-  localStorage.setItem(budgetStorageKey, JSON.stringify(budgetState));
-};
-
-const ensureBudgetState = () => {
-  if (!budgetState) {
-    budgetState = loadBudgetState();
-  }
-  budgetState.transactions.forEach((transaction) => {
+const normalizeBudgetTransactions = (state) => {
+  state.transactions.forEach((transaction) => {
     if (!transaction.id) {
       transaction.id = createBudgetId("txn");
     }
@@ -2451,34 +2576,169 @@ const ensureBudgetState = () => {
   });
 };
 
-const getExistingBudgets = () => {
+const updateActiveWorkspaceFromBudgetState = () => {
+  if (!activeWorkspace || !budgetState) {
+    return;
+  }
+  activeWorkspace.budget = {
+    bills: budgetState.bills,
+    categories: budgetState.categories,
+    rules: budgetState.rules,
+  };
+  activeWorkspace.transactions = budgetState.transactions;
+  activeWorkspace.ui = {
+    budgetFilterMode,
+    budgetSearchQuery,
+    collapsedCategoryIds: Array.from(collapsedCategoryIds),
+  };
+};
+
+const hydrateBudgetStateFromWorkspace = (workspace) => {
+  const normalized = sanitizeBudgetState({
+    bills: workspace?.budget?.bills,
+    categories: workspace?.budget?.categories,
+    rules: workspace?.budget?.rules,
+    transactions: workspace?.transactions,
+  });
+  budgetState = normalized;
+  if (workspace?.budget) {
+    workspace.budget.bills = normalized.bills;
+    workspace.budget.categories = normalized.categories;
+    workspace.budget.rules = normalized.rules;
+  }
+  if (workspace) {
+    workspace.transactions = normalized.transactions;
+  }
+};
+
+const syncBudgetFilterButtons = () => {
+  if (!budgetFilter) {
+    return;
+  }
+  budgetFilter.querySelectorAll("button").forEach((item) => {
+    item.classList.toggle("is-active", item.dataset.filter === budgetFilterMode);
+  });
+};
+
+const applyWorkspaceState = (workspace) => {
+  activeWorkspace = workspace;
+  activeWorkspaceId = workspace.id;
+  hydrateBudgetStateFromWorkspace(workspace);
+  budgetFilterMode = workspace.ui?.budgetFilterMode || "all";
+  budgetSearchQuery = workspace.ui?.budgetSearchQuery || "";
+  collapsedCategoryIds = new Set(workspace.ui?.collapsedCategoryIds || []);
+  normalizeBudgetTransactions(budgetState);
+  syncBudgetFilterButtons();
+  if (searchInput && activeModule === "budget") {
+    searchInput.value = budgetSearchQuery;
+  }
+};
+
+const migrateLegacyBudgetStateIfNeeded = () => {
   if (!window.localStorage) {
-    return [];
+    return null;
+  }
+  if (getWorkspaceIndex().length) {
+    return null;
   }
   const stored = localStorage.getItem(budgetStorageKey);
   if (!stored) {
-    return [];
+    return null;
   }
-  return [{ id: "saved-budget", name: "Saved budget" }];
+  try {
+    const legacy = sanitizeBudgetState(JSON.parse(stored));
+    const workspace = createWorkspace({
+      name: "Migrated workspace",
+      savedAt: new Date().toISOString(),
+      budget: legacy,
+      transactions: legacy.transactions,
+      ui: {
+        budgetFilterMode: "all",
+        budgetSearchQuery: "",
+        collapsedCategoryIds: [],
+      },
+    });
+    saveWorkspaceIndex([
+      { id: workspace.id, name: workspace.name, savedAt: workspace.savedAt },
+    ]);
+    persistWorkspaceItem(workspace);
+    return workspace;
+  } catch (error) {
+    return null;
+  }
 };
 
-const renderBudgetSelector = () => {
+const loadMostRecentWorkspace = () => {
+  const index = listWorkspaces();
+  for (const entry of index) {
+    const workspace = readWorkspaceItem(entry.id);
+    if (workspace) {
+      return workspace;
+    }
+  }
+  return null;
+};
+
+const ensureActiveWorkspace = () => {
+  if (activeWorkspace) {
+    return;
+  }
+  const migrated = migrateLegacyBudgetStateIfNeeded();
+  if (migrated) {
+    applyWorkspaceState(migrated);
+    return;
+  }
+  const existing = loadMostRecentWorkspace();
+  if (existing) {
+    applyWorkspaceState(existing);
+    return;
+  }
+  applyWorkspaceState(createWorkspace());
+};
+
+const saveBudgetState = () => {
+  if (!activeWorkspace || !budgetState) {
+    return;
+  }
+  updateActiveWorkspaceFromBudgetState();
+  if (!window.localStorage) {
+    return;
+  }
+  const index = getWorkspaceIndex();
+  const existing = index.find((entry) => entry.id === activeWorkspace.id);
+  if (!existing) {
+    return;
+  }
+  persistWorkspaceItem(activeWorkspace);
+};
+
+const ensureBudgetState = () => {
+  if (!budgetState) {
+    budgetState = getBudgetDefaults();
+  }
+  normalizeBudgetTransactions(budgetState);
+};
+
+const renderWorkspaceSelector = () => {
   if (!budgetSelectorList || !budgetSelectorEmpty) {
     return;
   }
   budgetSelectorList.innerHTML = "";
-  const budgets = getExistingBudgets();
-  if (!budgets.length) {
+  const workspaces = listWorkspaces();
+  if (!workspaces.length) {
     budgetSelectorEmpty.hidden = false;
     return;
   }
   budgetSelectorEmpty.hidden = true;
-  budgets.forEach((budget) => {
+  workspaces.forEach((workspace) => {
     const button = document.createElement("button");
     button.type = "button";
-    button.textContent = budget.name;
+    button.textContent = workspace.name;
     button.addEventListener("click", () => {
-      ensureBudgetState();
+      const loaded = loadWorkspace(workspace.id);
+      if (!loaded) {
+        return;
+      }
       navigateToPath("/budget");
       if (budgetModal) {
         closeModal(budgetModal);
@@ -2492,8 +2752,129 @@ const openBudgetSelector = () => {
   if (!budgetModal) {
     return;
   }
-  renderBudgetSelector();
+  renderWorkspaceSelector();
+  if (workspaceNameInput) {
+    workspaceNameInput.value = activeWorkspace?.name || "";
+  }
   openModal(budgetModal);
+};
+
+const createNewWorkspace = (name) => {
+  const workspace = createWorkspace({
+    name: name || "Untitled workspace",
+    budget: getBudgetDefaults(),
+    transactions: [],
+    ui: {
+      budgetFilterMode: "all",
+      budgetSearchQuery: "",
+      collapsedCategoryIds: [],
+    },
+  });
+  applyWorkspaceState(workspace);
+  renderBudget();
+};
+
+const saveActiveWorkspace = (name) => {
+  if (!budgetState) {
+    budgetState = getBudgetDefaults();
+  }
+  if (!activeWorkspace) {
+    activeWorkspace = createWorkspace({
+      name: name || "Untitled workspace",
+      budget: budgetState,
+      transactions: budgetState.transactions,
+      ui: {
+        budgetFilterMode,
+        budgetSearchQuery,
+        collapsedCategoryIds: Array.from(collapsedCategoryIds),
+      },
+    });
+    activeWorkspaceId = activeWorkspace.id;
+  }
+  if (name) {
+    activeWorkspace.name = name;
+  }
+  updateActiveWorkspaceFromBudgetState();
+  activeWorkspace.savedAt = new Date().toISOString();
+  const index = getWorkspaceIndex();
+  const existing = index.find((entry) => entry.id === activeWorkspace.id);
+  if (existing) {
+    existing.name = activeWorkspace.name;
+    existing.savedAt = activeWorkspace.savedAt;
+  } else {
+    index.push({
+      id: activeWorkspace.id,
+      name: activeWorkspace.name,
+      savedAt: activeWorkspace.savedAt,
+    });
+  }
+  saveWorkspaceIndex(index);
+  persistWorkspaceItem(activeWorkspace);
+  renderWorkspaceSelector();
+  setStatus("Workspace saved.");
+};
+
+const loadWorkspace = (id) => {
+  const workspace = readWorkspaceItem(id);
+  if (!workspace) {
+    setStatus("Workspace not found.");
+    return null;
+  }
+  applyWorkspaceState(workspace);
+  renderBudget();
+  return workspace;
+};
+
+const exportWorkspace = () => {
+  if (!activeWorkspace) {
+    setStatus("No active workspace to export.");
+    return;
+  }
+  updateActiveWorkspaceFromBudgetState();
+  const blob = new Blob([JSON.stringify(activeWorkspace, null, 2)], {
+    type: "application/json",
+  });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  const safeName = activeWorkspace.name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)/g, "");
+  link.href = url;
+  link.download = `${safeName || "workspace"}.json`;
+  link.click();
+  URL.revokeObjectURL(url);
+};
+
+const importWorkspace = (file) => {
+  const reader = new FileReader();
+  reader.onload = (event) => {
+    try {
+      const parsed = JSON.parse(event.target.result);
+      const normalized = normalizeWorkspace(parsed);
+      if (!normalized) {
+        setStatus("Invalid workspace JSON.");
+        return;
+      }
+      const index = getWorkspaceIndex();
+      if (index.some((entry) => entry.id === normalized.id)) {
+        normalized.id = createWorkspaceId();
+      }
+      normalized.savedAt = new Date().toISOString();
+      persistWorkspaceItem(normalized);
+      index.push({
+        id: normalized.id,
+        name: normalized.name,
+        savedAt: normalized.savedAt,
+      });
+      saveWorkspaceIndex(index);
+      renderWorkspaceSelector();
+      setStatus(`Imported workspace "${normalized.name}".`);
+    } catch (error) {
+      setStatus("Invalid workspace JSON.");
+    }
+  };
+  reader.readAsText(file);
 };
 
 const setActiveModule = (moduleName) => {
@@ -2528,6 +2909,7 @@ const setActiveModule = (moduleName) => {
       moduleName === "budget" ? budgetSearchQuery : searchQuery;
   }
   if (moduleName === "budget") {
+    ensureActiveWorkspace();
     ensureBudgetState();
     renderBudget();
   }
@@ -3693,6 +4075,8 @@ const parseCsv = (text) => {
 const importTransactionsFromCsv = (file) => {
   const reader = new FileReader();
   reader.onload = (event) => {
+    ensureActiveWorkspace();
+    ensureBudgetState();
     const text = event.target.result;
     const rows = parseCsv(text);
     if (!rows.length) {
@@ -3764,6 +4148,8 @@ const importTransactionsFromCsv = (file) => {
 };
 
 const exportBudgetJson = () => {
+  ensureActiveWorkspace();
+  ensureBudgetState();
   const blob = new Blob([JSON.stringify(budgetState, null, 2)], {
     type: "application/json",
   });
@@ -3779,7 +4165,16 @@ const importBudgetJson = (file) => {
   const reader = new FileReader();
   reader.onload = (event) => {
     try {
-      budgetState = sanitizeBudgetState(JSON.parse(event.target.result));
+      const imported = sanitizeBudgetState(JSON.parse(event.target.result));
+      ensureActiveWorkspace();
+      budgetState = imported;
+      if (activeWorkspace) {
+        activeWorkspace.budget.bills = imported.bills;
+        activeWorkspace.budget.categories = imported.categories;
+        activeWorkspace.budget.rules = imported.rules;
+        activeWorkspace.transactions = imported.transactions;
+      }
+      normalizeBudgetTransactions(budgetState);
       saveBudgetState();
       renderBudget();
     } catch (error) {
@@ -3918,6 +4313,10 @@ if (openBudgetButton) {
   openBudgetButton.addEventListener("click", () => openBudgetSelector());
 }
 
+if (workspaceOpenButton) {
+  workspaceOpenButton.addEventListener("click", () => openBudgetSelector());
+}
+
 if (openClassBuilderButton) {
   openClassBuilderButton.addEventListener("click", () =>
     navigateToPath("/class-builder")
@@ -3932,8 +4331,7 @@ if (openBudgetBuilderButton) {
 
 if (budgetNewButton) {
   budgetNewButton.addEventListener("click", () => {
-    budgetState = getBudgetDefaults();
-    saveBudgetState();
+    createNewWorkspace();
     navigateToPath("/budget");
     if (budgetModal) {
       closeModal(budgetModal);
@@ -3943,8 +4341,7 @@ if (budgetNewButton) {
 
 if (budgetNewSidebarButton) {
   budgetNewSidebarButton.addEventListener("click", () => {
-    budgetState = getBudgetDefaults();
-    saveBudgetState();
+    createNewWorkspace();
     navigateToPath("/budget");
   });
 }
@@ -3960,6 +4357,48 @@ if (budgetImportCsvButton) {
     if (budgetCsvInput) {
       budgetCsvInput.value = "";
       budgetCsvInput.click();
+    }
+  });
+}
+
+if (workspaceSaveButton) {
+  workspaceSaveButton.addEventListener("click", () => {
+    const name = workspaceNameInput?.value.trim();
+    saveActiveWorkspace(name || undefined);
+    if (workspaceNameInput && activeWorkspace?.name) {
+      workspaceNameInput.value = activeWorkspace.name;
+    }
+  });
+}
+
+if (workspaceSaveSidebarButton) {
+  workspaceSaveSidebarButton.addEventListener("click", () => {
+    saveActiveWorkspace(workspaceNameInput?.value.trim() || undefined);
+  });
+}
+
+if (workspaceExportButton) {
+  workspaceExportButton.addEventListener("click", () => exportWorkspace());
+}
+
+if (workspaceExportSidebarButton) {
+  workspaceExportSidebarButton.addEventListener("click", () => exportWorkspace());
+}
+
+if (workspaceImportButton) {
+  workspaceImportButton.addEventListener("click", () => {
+    if (workspaceJsonInput) {
+      workspaceJsonInput.value = "";
+      workspaceJsonInput.click();
+    }
+  });
+}
+
+if (workspaceJsonInput) {
+  workspaceJsonInput.addEventListener("change", (event) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      importWorkspace(file);
     }
   });
 }
