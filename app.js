@@ -35,6 +35,9 @@ const openProjectInput = document.getElementById("open-project-input");
 const searchInput = document.getElementById("search-input");
 const undoButton = document.getElementById("undo-action");
 const redoButton = document.getElementById("redo-action");
+const primaryToolbar = document.getElementById("primary-toolbar");
+const budgetTools = document.getElementById("budget-tools");
+const miniToolbar = document.querySelector(".mini-toolbar");
 const viewOptionsToggle = document.getElementById("view-options-toggle");
 const viewOptionsPanel = document.getElementById("view-options");
 const fitToScreenButton = document.getElementById("fit-to-screen");
@@ -2302,6 +2305,11 @@ const ensureBudgetState = () => {
   if (!budgetState) {
     budgetState = loadBudgetState();
   }
+  budgetState.transactions.forEach((transaction) => {
+    if (!transaction.id) {
+      transaction.id = createBudgetId("txn");
+    }
+  });
 };
 
 const getExistingBudgets = () => {
@@ -2353,6 +2361,15 @@ const setActiveModule = (moduleName) => {
   activeModule = moduleName;
   document.body.dataset.view =
     moduleName === "budget" ? "budget" : moduleName === "menu" ? "menu" : "vefa";
+  if (primaryToolbar && budgetTools && miniToolbar) {
+    if (moduleName === "budget") {
+      if (!budgetTools.contains(primaryToolbar)) {
+        budgetTools.appendChild(primaryToolbar);
+      }
+    } else if (!miniToolbar.contains(primaryToolbar)) {
+      miniToolbar.appendChild(primaryToolbar);
+    }
+  }
   if (mainMenu) {
     mainMenu.hidden = moduleName !== "menu";
   }
@@ -2544,17 +2561,18 @@ const renderBudgetBills = () => {
   }
   budgetBillsTable.innerHTML = "";
   const headerRow = document.createElement("div");
-  headerRow.className = "budget-row budget-row--header";
+  headerRow.className = "budget-row budget-row--header budget-row--bills";
   headerRow.innerHTML = `
     <div>Bill</div>
     <div>Budget</div>
     <div>Actual</div>
     <div>Paid/Unpaid</div>
+    <div>Delete</div>
   `;
   budgetBillsTable.appendChild(headerRow);
   budgetState.bills.forEach((bill) => {
     const row = document.createElement("div");
-    row.className = "budget-row";
+    row.className = "budget-row budget-row--bills";
     const actualValue = getBillActual(bill);
     row.innerHTML = `
       <input type="text" value="${bill.name}" />
@@ -2566,12 +2584,14 @@ const renderBudgetBills = () => {
         <input type="checkbox" ${bill.paid ? "checked" : ""} />
         <span>${bill.paid ? "Paid" : "Unpaid"}</span>
       </label>
+      <button type="button" data-action="delete">Delete</button>
     `;
     const inputs = row.querySelectorAll("input");
     const nameInput = inputs[0];
     const budgetInput = inputs[1];
     const actualInput = inputs[2];
     const paidInput = inputs[3];
+    const deleteButton = row.querySelector('[data-action="delete"]');
     nameInput.addEventListener("input", (event) => {
       bill.name = event.target.value;
       saveBudgetState();
@@ -2612,6 +2632,22 @@ const renderBudgetBills = () => {
       saveBudgetState();
       renderBudgetTotals();
       renderBudgetBills();
+    });
+    deleteButton.addEventListener("click", () => {
+      budgetState.bills = budgetState.bills.filter(
+        (entry) => entry.id !== bill.id
+      );
+      budgetState.transactions.forEach((transaction) => {
+        if (
+          transaction.tag?.type === "bill" &&
+          transaction.tag?.targetId === bill.id
+        ) {
+          transaction.tag = { type: "unintentional" };
+          transaction.reviewed = false;
+        }
+      });
+      saveBudgetState();
+      renderBudget();
     });
     budgetBillsTable.appendChild(row);
   });
@@ -2674,6 +2710,29 @@ const renderBudgetUnintentional = () => {
     0
   );
   const list = unintentionalTransactions.slice(0, 5);
+  const billOptions = budgetState.bills
+    .map(
+      (bill) => `<option value="bill:${bill.id}">${bill.name}</option>`
+    )
+    .join("");
+  const categoryOptions = budgetState.categories
+    .map(
+      (category) =>
+        `<option value="category:${category.id}">${category.name}</option>`
+    )
+    .join("");
+  const hasAssignments = billOptions.length || categoryOptions.length;
+  const assignOptions = hasAssignments
+    ? `
+      <option value="">Select a bill or category</option>
+      ${billOptions ? `<optgroup label="Bills">${billOptions}</optgroup>` : ""}
+      ${
+        categoryOptions
+          ? `<optgroup label="Categories">${categoryOptions}</optgroup>`
+          : ""
+      }
+    `
+    : `<option value="">No bills or categories</option>`;
   budgetUnintentional.innerHTML = `
     <div class="budget-unintentional__summary">
       <strong>${formatCurrency(total)}</strong>
@@ -2683,8 +2742,29 @@ const renderBudgetUnintentional = () => {
       ${list
         .map(
           (transaction) => `
-            <div class="budget-unintentional__item">
-              <span>${transaction.description}</span>
+            <div class="budget-unintentional__item" data-transaction-id="${
+              transaction.id
+            }">
+              <button
+                type="button"
+                class="budget-unintentional__assign-toggle"
+                aria-expanded="false"
+              >
+                Assign
+              </button>
+              <div class="budget-unintentional__details">
+                <span class="budget-unintentional__title">${
+                  transaction.description
+                }</span>
+                <label class="budget-unintentional__assign">
+                  <span>Assign to</span>
+                  <select ${
+                    hasAssignments ? "" : "disabled"
+                  } data-role="unintentional-assign">
+                    ${assignOptions}
+                  </select>
+                </label>
+              </div>
               <span>${formatCurrency(Math.abs(transaction.amount || 0))}</span>
             </div>
           `
@@ -2692,6 +2772,43 @@ const renderBudgetUnintentional = () => {
         .join("")}
     </div>
   `;
+  budgetUnintentional
+    .querySelectorAll(".budget-unintentional__item")
+    .forEach((item) => {
+      const toggle = item.querySelector(".budget-unintentional__assign-toggle");
+      const select = item.querySelector('[data-role="unintentional-assign"]');
+      if (!toggle || !select) {
+        return;
+      }
+      toggle.addEventListener("click", () => {
+        item.classList.toggle("is-assigning");
+        toggle.setAttribute(
+          "aria-expanded",
+          item.classList.contains("is-assigning") ? "true" : "false"
+        );
+        if (item.classList.contains("is-assigning")) {
+          select.focus();
+        }
+      });
+      select.addEventListener("change", (event) => {
+        const selection = event.target.value;
+        if (!selection) {
+          return;
+        }
+        const [type, targetId] = selection.split(":");
+        const transactionId = item.dataset.transactionId;
+        const transaction = budgetState.transactions.find(
+          (entry) => entry.id === transactionId
+        );
+        if (!transaction) {
+          return;
+        }
+        transaction.tag = { type, targetId };
+        transaction.reviewed = true;
+        saveBudgetState();
+        renderBudget();
+      });
+    });
 };
 
 const renderBudgetTransactions = () => {

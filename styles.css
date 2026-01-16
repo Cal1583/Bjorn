@@ -183,6 +183,11 @@ body {
   display: none;
 }
 
+.sidebar__budget-tools {
+  display: grid;
+  gap: 0.6rem;
+}
+
 .sidebar button {
   padding: 0.55rem 0.75rem;
   border-radius: 8px;
@@ -217,6 +222,10 @@ body[data-view="budget"] .sidebar__status {
 
 body[data-view="budget"] .sidebar__section--budget {
   display: flex;
+}
+
+body[data-view="budget"] .mini-toolbar {
+  display: none;
 }
 
 .template-list {
@@ -1265,6 +1274,10 @@ body[data-view="budget"] .mini-toolbar {
   align-items: center;
 }
 
+.budget-row--bills {
+  grid-template-columns: 1.4fr 0.9fr 0.9fr 0.8fr 0.6fr;
+}
+
 .budget-row--categories {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
@@ -1367,10 +1380,45 @@ body[data-view="budget"] .mini-toolbar {
 }
 
 .budget-unintentional__item {
-  display: flex;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 0.6rem;
+  align-items: center;
   font-size: 0.9rem;
   color: #5a6278;
+}
+
+.budget-unintentional__assign-toggle {
+  padding: 0.35rem 0.6rem;
+  border-radius: 8px;
+  border: 1px solid #c8d1e3;
+  background: #f8f9ff;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.budget-unintentional__details {
+  display: grid;
+  gap: 0.3rem;
+}
+
+.budget-unintentional__assign {
+  display: none;
+  gap: 0.4rem;
+  align-items: center;
+}
+
+.budget-unintentional__item.is-assigning .budget-unintentional__assign {
+  display: flex;
+}
+
+.budget-unintentional__assign select {
+  flex: 1;
+  padding: 0.35rem 0.5rem;
+  border-radius: 8px;
+  border: 1px solid #c8d1e3;
+  background: #f8f9ff;
+  font: inherit;
 }
 
 .budget-transactions {
@@ -1687,6 +1735,8 @@ body[data-view="budget"] .mini-toolbar {
 :root[data-theme="dark"] .budget-form input,
 :root[data-theme="dark"] .budget-form select,
 :root[data-theme="dark"] .budget-row button,
+:root[data-theme="dark"] .budget-unintentional__assign-toggle,
+:root[data-theme="dark"] .budget-unintentional__assign select,
 :root[data-theme="dark"] .budget-form button,
 :root[data-theme="dark"] .budget-transaction__assign select,
 :root[data-theme="dark"] .budget-transaction__assign button,
