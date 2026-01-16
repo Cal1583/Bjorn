@@ -77,6 +77,12 @@ const budgetAddCategoryForm = document.getElementById("budget-add-category");
 const budgetAddTransactionForm = document.getElementById("budget-add-transaction");
 const toggleTooltipsButton = document.getElementById("toggle-tooltips");
 const budgetNetBalance = document.getElementById("budget-net-balance");
+const budgetCollapseCategoriesButton = document.getElementById(
+  "budget-collapse-categories"
+);
+const budgetExpandCategoriesButton = document.getElementById(
+  "budget-expand-categories"
+);
 
 let modelState = {
   classes: [],
@@ -112,6 +118,9 @@ let budgetState = null;
 let budgetFilterMode = "all";
 let budgetSearchQuery = "";
 let tooltipsEnabled = true;
+let collapsedCategoryIds = new Set();
+
+const assignmentFeedback = new Map();
 
 const zoomSettings = {
   min: 0.1,
@@ -2318,20 +2327,29 @@ const formatTransactionTypeLabel = (transactionType) => {
   return transactionType.trim();
 };
 
+const transactionTypeIncludes = (transactionType, matchers) =>
+  matchers.some((matcher) => transactionType.includes(matcher));
+
 const getTransactionKind = (transaction) => {
   const normalized = normalizeTransactionType(transaction?.transactionType);
-  if (normalized === "credit") {
+  if (transactionTypeIncludes(normalized, ["credit", "deposit", "refund"])) {
     return "credit";
   }
-  if (normalized === "transfer") {
+  if (transactionTypeIncludes(normalized, ["transfer"])) {
     return "transfer";
   }
-  if (normalized === "payment") {
+  if (transactionTypeIncludes(normalized, ["payment", "pos", "debit"])) {
     return "payment";
   }
   const amount = transaction?.amount ?? 0;
   return amount >= 0 ? "credit" : "payment";
 };
+
+const isCreditOrTransferTransaction = (transaction) =>
+  ["credit", "transfer"].includes(getTransactionKind(transaction));
+
+const isSpendTransaction = (transaction) =>
+  getTransactionKind(transaction) === "payment";
 
 const getTransactionImpact = (transaction) => {
   const amount = Math.abs(transaction?.amount || 0);
@@ -2398,6 +2416,10 @@ const ensureBudgetState = () => {
     if (!transaction.id) {
       transaction.id = createBudgetId("txn");
     }
+    if (!transaction.tag) {
+      transaction.tag = { type: "unintentional" };
+    }
+    syncTransactionAssignmentFields(transaction);
   });
 };
 
@@ -2553,7 +2575,7 @@ const getBillActual = (bill) => {
   if (bill.actual === null || bill.actual === undefined) {
     return actualFromTransactions;
   }
-  return bill.actual;
+  return bill.actual + actualFromTransactions;
 };
 
 const getCategorySpent = (category) =>
@@ -2590,6 +2612,33 @@ const getTagLabel = (tag) => {
     );
   }
   return "Unintentional";
+};
+
+const syncTransactionAssignmentFields = (transaction) => {
+  const tag = transaction.tag || { type: "unintentional" };
+  const type = tag.type || "unintentional";
+  transaction.assignedTargetType = type;
+  transaction.assignedTargetId =
+    type === "unintentional" ? null : tag.targetId || null;
+  transaction.assignedTargetName = getTagLabel(tag);
+};
+
+const setTransactionAssignment = (transaction, { type, targetId }) => {
+  const normalizedType = type || "unintentional";
+  if (normalizedType === "unintentional") {
+    transaction.tag = { type: "unintentional" };
+  } else {
+    transaction.tag = { type: normalizedType, targetId };
+  }
+  syncTransactionAssignmentFields(transaction);
+};
+
+const setCategoryCollapsed = (categoryId, isCollapsed) => {
+  if (isCollapsed) {
+    collapsedCategoryIds.add(categoryId);
+  } else {
+    collapsedCategoryIds.delete(categoryId);
+  }
 };
 
 const renderBudgetTotals = () => {
@@ -2747,7 +2796,7 @@ const renderBudgetBills = () => {
           transaction.tag?.type === "bill" &&
           transaction.tag?.targetId === bill.id
         ) {
-          transaction.tag = { type: "unintentional" };
+          setTransactionAssignment(transaction, { type: "unintentional" });
           transaction.reviewed = false;
         }
       });
@@ -2769,12 +2818,14 @@ const renderBudgetCategories = () => {
     <div>Category</div>
     <div>Cap</div>
     <div>Spent</div>
-    <div>Remove</div>
+    <div>Actions</div>
   `;
   budgetCategoriesTable.appendChild(headerRow);
   budgetState.categories.forEach((category) => {
     const group = document.createElement("div");
     group.className = "budget-category-group";
+    const isCollapsed = collapsedCategoryIds.has(category.id);
+    group.classList.toggle("is-collapsed", isCollapsed);
     const row = document.createElement("div");
     row.className = "budget-row budget-row--categories";
     const spent = getCategorySpent(category);
@@ -2784,10 +2835,16 @@ const renderBudgetCategories = () => {
         category.cap ?? ""
       }" />
       <div>${formatCurrency(spent)}</div>
-      <button type="button" data-action="delete">Remove</button>
+      <div class="budget-row__actions">
+        <button type="button" data-action="toggle">${
+          isCollapsed ? "Expand" : "Collapse"
+        }</button>
+        <button type="button" data-action="delete">Remove</button>
+      </div>
     `;
     const [nameInput, capInput] = row.querySelectorAll("input");
     const deleteButton = row.querySelector('[data-action="delete"]');
+    const toggleButton = row.querySelector('[data-action="toggle"]');
     nameInput.addEventListener("input", (event) => {
       category.name = event.target.value;
       saveBudgetState();
@@ -2814,12 +2871,18 @@ const renderBudgetCategories = () => {
             transaction.tag?.type === "category" &&
             transaction.tag?.targetId === category.id
           ) {
-            transaction.tag = { type: "unintentional" };
+            setTransactionAssignment(transaction, { type: "unintentional" });
             transaction.reviewed = false;
           }
         });
         saveBudgetState();
         renderBudget();
+      });
+    }
+    if (toggleButton) {
+      toggleButton.addEventListener("click", () => {
+        setCategoryCollapsed(category.id, !collapsedCategoryIds.has(category.id));
+        renderBudgetCategories();
       });
     }
     group.appendChild(row);
@@ -2828,7 +2891,7 @@ const renderBudgetCategories = () => {
         transaction.tag?.type === "category" &&
         transaction.tag?.targetId === category.id
     );
-    if (categoryTransactions.length) {
+    if (categoryTransactions.length && !isCollapsed) {
       const transactionList = document.createElement("div");
       transactionList.className = "budget-category-transactions";
       categoryTransactions.forEach((transaction) => {
@@ -2853,7 +2916,7 @@ const renderBudgetCategories = () => {
         );
         if (clearButton) {
           clearButton.addEventListener("click", () => {
-            transaction.tag = { type: "unintentional" };
+            setTransactionAssignment(transaction, { type: "unintentional" });
             transaction.reviewed = false;
             saveBudgetState();
             renderBudget();
@@ -2872,7 +2935,8 @@ const renderBudgetUnintentional = () => {
     return;
   }
   const unintentionalTransactions = budgetState.transactions.filter(
-    (transaction) => transaction.tag?.type === "unintentional"
+    (transaction) =>
+      transaction.tag?.type === "unintentional" && isSpendTransaction(transaction)
   );
   const total = unintentionalTransactions.reduce(
     (sum, transaction) => sum + getTransactionImpact(transaction),
@@ -2972,7 +3036,7 @@ const renderBudgetUnintentional = () => {
         if (!transaction) {
           return;
         }
-        transaction.tag = { type, targetId };
+        setTransactionAssignment(transaction, { type, targetId });
         transaction.reviewed = true;
         saveBudgetState();
         renderBudget();
@@ -2986,12 +3050,11 @@ const renderBudgetTransactionsSummary = () => {
   }
   budgetTransactionsSummary.innerHTML = "";
   const filteredTransactions = budgetState.transactions.filter((transaction) => {
-    const kind = getTransactionKind(transaction);
-    return kind === "credit" || kind === "transfer";
+    return isCreditOrTransferTransaction(transaction);
   });
   if (!filteredTransactions.length) {
     budgetTransactionsSummary.innerHTML =
-      '<p class="template-empty">No credits or transfers yet.</p>';
+      '<p class="template-empty">No credits or transfers loaded yet.</p>';
     return;
   }
   const headerRow = document.createElement("div");
@@ -3033,6 +3096,9 @@ const renderBudgetTransactions = () => {
     return;
   }
   const filteredTransactions = budgetState.transactions.filter((transaction) => {
+    if (!isSpendTransaction(transaction)) {
+      return false;
+    }
     if (budgetFilterMode === "reviewed" && !transaction.reviewed) {
       return false;
     }
@@ -3047,17 +3113,24 @@ const renderBudgetTransactions = () => {
     return true;
   });
   if (filteredTransactions.length === 0) {
-    budgetTransactions.innerHTML = `<p class="template-empty">No transactions loaded.</p>`;
+    budgetTransactions.innerHTML = `<p class="template-empty">No spend transactions loaded.</p>`;
     return;
   }
   budgetTransactions.innerHTML = "";
   filteredTransactions.forEach((transaction) => {
+    syncTransactionAssignmentFields(transaction);
     const row = document.createElement("div");
     row.className = `budget-transaction ${
       transaction.reviewed ? "is-reviewed" : ""
     }`;
     const assignmentType = transaction.tag?.type || "unintentional";
     const assignmentTarget = transaction.tag?.targetId || "";
+    const assignmentLabel =
+      assignmentType !== "unintentional" ? getTagLabel(transaction.tag) : "";
+    const statusMessage = assignmentLabel
+      ? `Assigned to: ${assignmentLabel}`
+      : "";
+    const feedback = assignmentFeedback.get(transaction.id);
     row.innerHTML = `
       <div class="budget-transaction__meta">
         <strong>${transaction.description}</strong>
@@ -3092,6 +3165,9 @@ const renderBudgetTransactions = () => {
           <select data-role="assign-target"></select>
         </label>
         <button type="button" data-action="assign">Assign</button>
+        <span class="budget-transaction__status ${
+          statusMessage ? "is-success" : ""
+        }" data-role="assignment-status">${statusMessage}</span>
       </div>
       <div class="budget-transaction__amount">
         ${formatTransactionAmount(transaction)}
@@ -3110,9 +3186,24 @@ const renderBudgetTransactions = () => {
     const assignTypeSelect = row.querySelector('[data-role="assign-type"]');
     const assignTargetSelect = row.querySelector('[data-role="assign-target"]');
     const assignButton = row.querySelector('[data-action="assign"]');
+    const statusElement = row.querySelector('[data-role="assignment-status"]');
     const transactionTypeSelect = row.querySelector(
       '[data-role="transaction-type"]'
     );
+    if (feedback && assignButton) {
+      const remaining = feedback.expiresAt - Date.now();
+      if (remaining > 0) {
+        assignButton.disabled = true;
+        assignButton.textContent = feedback.label;
+        assignButton.classList.add("is-feedback");
+        setTimeout(() => {
+          assignmentFeedback.delete(transaction.id);
+          renderBudgetTransactions();
+        }, remaining);
+      } else {
+        assignmentFeedback.delete(transaction.id);
+      }
+    }
     const currentKind = getTransactionKind(transaction);
     if (transactionTypeSelect) {
       transactionTypeSelect.value = currentKind;
@@ -3154,9 +3245,26 @@ const renderBudgetTransactions = () => {
     assignButton.addEventListener("click", () => {
       const type = assignTypeSelect.value;
       const targetId = assignTargetSelect.value || null;
-      transaction.tag =
-        type === "unintentional" ? { type } : { type, targetId };
+      if (type !== "unintentional" && !targetId) {
+        if (statusElement) {
+          statusElement.textContent = "Select a target to assign.";
+          statusElement.classList.remove("is-success");
+          statusElement.classList.add("is-error");
+        }
+        return;
+      }
+      setTransactionAssignment(transaction, { type, targetId });
       saveBudgetState();
+      const label = getTagLabel(transaction.tag);
+      assignmentFeedback.set(transaction.id, {
+        label: "Assigned ✓",
+        expiresAt: Date.now() + 700,
+      });
+      if (statusElement) {
+        statusElement.textContent = `Assigned to: ${label}`;
+        statusElement.classList.remove("is-error");
+        statusElement.classList.add("is-success");
+      }
       renderBudget();
     });
     row.querySelector('[data-action="review"]').addEventListener("click", () => {
@@ -3166,7 +3274,7 @@ const renderBudgetTransactions = () => {
       renderBudgetTotals();
     });
     row.querySelector('[data-action="clear"]').addEventListener("click", () => {
-      transaction.tag = { type: "unintentional" };
+      setTransactionAssignment(transaction, { type: "unintentional" });
       transaction.reviewed = false;
       saveBudgetState();
       renderBudget();
@@ -3202,9 +3310,10 @@ const applyAutoTagsToTransactions = ({ onlyUnintentional = false } = {}) => {
       transaction.tag?.type === nextTag.type &&
       transaction.tag?.targetId === nextTag.targetId
     ) {
+      syncTransactionAssignmentFields(transaction);
       return;
     }
-    transaction.tag = nextTag;
+    setTransactionAssignment(transaction, nextTag);
     if (nextTag.type !== "unintentional") {
       transaction.reviewed = true;
     }
@@ -3305,6 +3414,7 @@ const importTransactionsFromCsv = (file) => {
         reviewed: autoTag.type !== "unintentional",
         tag: autoTag,
       };
+      syncTransactionAssignmentFields(transaction);
       acc.push(transaction);
       existingKeys.add(key);
       return acc;
@@ -3617,6 +3727,7 @@ if (budgetAddTransactionForm) {
       reviewed: false,
       tag: { type: "unintentional" },
     });
+    syncTransactionAssignmentFields(budgetState.transactions[0]);
     applyAutoTagsToTransactions({ onlyUnintentional: true });
     event.target.reset();
     saveBudgetState();
@@ -3635,6 +3746,22 @@ if (budgetFilter) {
       item.classList.toggle("is-active", item === button);
     });
     renderBudgetTransactions();
+  });
+}
+
+if (budgetCollapseCategoriesButton) {
+  budgetCollapseCategoriesButton.addEventListener("click", () => {
+    budgetState.categories.forEach((category) => {
+      collapsedCategoryIds.add(category.id);
+    });
+    renderBudgetCategories();
+  });
+}
+
+if (budgetExpandCategoriesButton) {
+  budgetExpandCategoriesButton.addEventListener("click", () => {
+    collapsedCategoryIds.clear();
+    renderBudgetCategories();
   });
 }
 

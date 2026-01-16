@@ -1323,6 +1323,21 @@ body[data-view="budget"] .mini-toolbar {
   font-size: 1.1rem;
 }
 
+.budget-panel__actions {
+  display: inline-flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.budget-panel__actions button {
+  padding: 0.35rem 0.7rem;
+  border-radius: 999px;
+  border: 1px solid #c8d1e3;
+  background: #f8f9ff;
+  font-weight: 600;
+  cursor: pointer;
+}
+
 .budget-totals {
   display: grid;
   gap: 0.8rem;
@@ -1365,6 +1380,10 @@ body[data-view="budget"] .mini-toolbar {
   margin-left: 0.8rem;
   padding-left: 0.8rem;
   border-left: 2px dashed #d4daee;
+}
+
+.budget-category-group.is-collapsed .budget-category-transactions {
+  display: none;
 }
 
 .budget-row--category-transaction {
@@ -1421,6 +1440,12 @@ body[data-view="budget"] .mini-toolbar {
   background: #f8f9ff;
   font-weight: 600;
   cursor: pointer;
+}
+
+.budget-row__actions {
+  display: inline-flex;
+  gap: 0.4rem;
+  justify-content: flex-end;
 }
 
 .budget-row__toggle {
@@ -1599,6 +1624,47 @@ body[data-view="budget"] .mini-toolbar {
   border: 1px solid #c8d1e3;
   background: #f8f9ff;
   font: inherit;
+}
+
+.budget-transaction__assign button {
+  transition: transform 0.1s ease, box-shadow 0.1s ease, background 0.1s ease;
+}
+
+.budget-transaction__assign button:hover {
+  background: #eef1fb;
+}
+
+.budget-transaction__assign button:active {
+  transform: translateY(1px);
+  box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.2);
+}
+
+.budget-transaction__assign button.is-feedback {
+  background: #e9f6ef;
+  border-color: #bfe6cd;
+  color: #1f6b3b;
+}
+
+.budget-transaction__assign button:disabled {
+  opacity: 0.7;
+  cursor: default;
+}
+
+.budget-transaction__status {
+  display: block;
+  min-height: 1rem;
+  font-size: 0.75rem;
+  color: #58627a;
+}
+
+.budget-transaction__status.is-success {
+  color: #1f6b3b;
+  font-weight: 600;
+}
+
+.budget-transaction__status.is-error {
+  color: #c0352b;
+  font-weight: 600;
 }
 
 .budget-transaction__actions {
@@ -1883,6 +1949,7 @@ body[data-view="budget"] .mini-toolbar {
 :root[data-theme="dark"] .budget-form button,
 :root[data-theme="dark"] .budget-transaction__assign select,
 :root[data-theme="dark"] .budget-transaction__assign button,
+:root[data-theme="dark"] .budget-panel__actions button,
 :root[data-theme="dark"] .budget-filter button {
   background: #242b3f;
   border-color: #3a4566;
@@ -1944,4 +2011,16 @@ body[data-view="budget"] .mini-toolbar {
 
 :root[data-theme="dark"] .budget-transaction__tag {
   color: #d4dbf5;
+}
+
+:root[data-theme="dark"] .budget-transaction__status {
+  color: #a8b2c7;
+}
+
+:root[data-theme="dark"] .budget-transaction__status.is-success {
+  color: #7ad9a0;
+}
+
+:root[data-theme="dark"] .budget-transaction__status.is-error {
+  color: #ff8e86;
 }
