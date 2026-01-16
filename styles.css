@@ -1278,7 +1278,7 @@ body[data-view="budget"] .mini-toolbar {
 
 .budget-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 320px;
+  grid-template-columns: minmax(0, 1fr) 360px;
   gap: 1.25rem;
   align-items: start;
 }
@@ -1290,7 +1290,7 @@ body[data-view="budget"] .mini-toolbar {
     "header header"
     "totals totals"
     "bills categories"
-    "unintentional unintentional";
+    "credits credits";
   gap: 1.25rem;
 }
 
@@ -1366,8 +1366,8 @@ body[data-view="budget"] .mini-toolbar {
   grid-area: categories;
 }
 
-#budget-unintentional-panel {
-  grid-area: unintentional;
+#budget-transactions-panel {
+  grid-area: credits;
 }
 
 .budget-panel__header {
@@ -1817,7 +1817,7 @@ body[data-view="budget"] .mini-toolbar {
       "totals"
       "bills"
       "categories"
-      "unintentional";
+      "credits";
   }
 
   .budget-panel--wide {
