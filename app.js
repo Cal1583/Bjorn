@@ -2604,60 +2604,7 @@ const normalizeMatchText = (value) => {
     .trim();
 };
 
-const getItemAliases = (item) => {
-  if (!item) {
-    return [];
-  }
-  const aliases = Array.isArray(item.aliases) ? item.aliases : [];
-  const keywords = Array.isArray(item.keywords) ? item.keywords : [];
-  const alias = item.alias ? [item.alias] : [];
-  return [...aliases, ...keywords, ...alias].filter(Boolean);
-};
-
-const getItemTypicalTypes = (item) => {
-  if (!item) {
-    return [];
-  }
-  if (Array.isArray(item.transactionTypes)) {
-    return item.transactionTypes;
-  }
-  if (Array.isArray(item.txnTypes)) {
-    return item.txnTypes;
-  }
-  if (item.transactionType) {
-    return [item.transactionType];
-  }
-  return [];
-};
-
-const getItemTargetAmount = (item, type) => {
-  if (!item) {
-    return null;
-  }
-  if (type === "bill") {
-    return item.budget ?? item.actual ?? null;
-  }
-  if (type === "category") {
-    return item.cap ?? null;
-  }
-  return null;
-};
-
-const getItemAmountTolerance = (item) => {
-  if (!item) {
-    return null;
-  }
-  if (typeof item.amountTolerance === "number") {
-    return item.amountTolerance;
-  }
-  if (typeof item.amountTolerancePercent === "number") {
-    return item.amountTolerancePercent / 100;
-  }
-  if (typeof item.tolerance === "number") {
-    return item.tolerance;
-  }
-  return null;
-};
+const getTodayIsoDate = () => new Date().toISOString().slice(0, 10);
 
 const getMatchRuleForDescription = (description) => {
   const normalizedDescription = normalizeMatchText(description);
@@ -2665,10 +2612,11 @@ const getMatchRuleForDescription = (description) => {
     return null;
   }
   const candidates = budgetState.rules
-    .filter((rule) => rule?.match && rule?.targetType && rule?.targetId)
+    .filter((rule) => rule?.targetType && rule?.targetId)
+    .filter((rule) => !rule.matchType || rule.matchType === "contains")
     .map((rule) => ({
       ...rule,
-      normalizedMatch: normalizeMatchText(rule.match),
+      normalizedMatch: normalizeMatchText(rule.pattern ?? rule.match),
     }))
     .filter((rule) => rule.normalizedMatch)
     .filter((rule) => normalizedDescription.includes(rule.normalizedMatch))
@@ -2698,77 +2646,23 @@ const getMatchRuleForDescription = (description) => {
   return null;
 };
 
-const getMatchScore = (transaction, item, type) => {
-  const normalizedDescription = normalizeMatchText(transaction.description);
-  const normalizedName = normalizeMatchText(item.name);
-  let score = 0;
-  if (normalizedName && normalizedDescription.includes(normalizedName)) {
-    score += 5;
-  }
-  const aliases = getItemAliases(item)
-    .map((alias) => normalizeMatchText(alias))
-    .filter(Boolean);
-  if (aliases.some((alias) => normalizedDescription.includes(alias))) {
-    score += 5;
-  }
-  const amount = getNormalizedTransactionAmount(transaction);
-  const targetAmount = getItemTargetAmount(item, type);
-  if (targetAmount !== null && targetAmount !== undefined) {
-    const normalizedTarget = Math.abs(targetAmount);
-    if (amount === normalizedTarget) {
-      score += 2;
-    } else {
-      const tolerance = getItemAmountTolerance(item);
-      if (typeof tolerance === "number" && tolerance > 0) {
-        const allowance =
-          tolerance <= 1 ? normalizedTarget * tolerance : tolerance;
-        if (Math.abs(amount - normalizedTarget) <= allowance) {
-          score += 1;
-        }
-      }
+const getBestMatchFromList = (list, normalizedDescription) => {
+  let best = null;
+  let bestLength = 0;
+  list.forEach((item) => {
+    const normalizedName = normalizeMatchText(item.name);
+    if (!normalizedName) {
+      return;
     }
-  }
-  const normalizedType = normalizeTransactionType(transaction?.transactionType);
-  const typicalTypes = getItemTypicalTypes(item)
-    .map((entry) => normalizeMatchText(entry))
-    .filter(Boolean);
-  if (
-    normalizedType &&
-    typicalTypes.some((entry) => normalizedType.includes(entry))
-  ) {
-    score += 1;
-  }
-  return score;
-};
-
-const getBestMatchFromList = (list, transaction, type) => {
-  const threshold = 6;
-  const scored = list
-    .map((item) => ({
-      item,
-      score: getMatchScore(transaction, item, type),
-    }))
-    .filter((entry) => entry.score >= threshold)
-    .sort((a, b) => b.score - a.score);
-  if (!scored.length) {
-    return null;
-  }
-  const top = scored[0];
-  const tied = scored.filter(
-    (entry) => entry.score === top.score && entry.item.id !== top.item.id
-  );
-  if (tied.length) {
-    return null;
-  }
-  return top.item;
-};
-
-const isPotentialAssignableTransaction = (transaction) => {
-  const normalizedType = normalizeTransactionType(transaction?.transactionType);
-  if (transactionTypeIncludes(normalizedType, ["transfer", "ach"])) {
-    return true;
-  }
-  return getTransactionKind(transaction) === "payment";
+    if (!normalizedDescription.includes(normalizedName)) {
+      return;
+    }
+    if (normalizedName.length > bestLength) {
+      best = item;
+      bestLength = normalizedName.length;
+    }
+  });
+  return best;
 };
 
 const getTagLabel = (tag) => {
@@ -2814,19 +2708,22 @@ const upsertMatchRule = (description, { type, targetId }) => {
   if (!normalizedMatch || !type || !targetId) {
     return;
   }
-  const existing = budgetState.rules.find(
-    (rule) => normalizeMatchText(rule.match) === normalizedMatch
-  );
+  const existing = budgetState.rules.find((rule) => {
+    const pattern = normalizeMatchText(rule.pattern ?? rule.match);
+    return pattern === normalizedMatch && rule.targetId === targetId;
+  });
   if (existing) {
-    existing.targetType = type;
-    existing.targetId = targetId;
+    existing.lastMatched = getTodayIsoDate();
     return;
   }
   budgetState.rules.push({
     id: createBudgetId("rule"),
-    match: normalizedMatch,
+    matchType: "contains",
+    pattern: normalizedMatch,
     targetType: type,
     targetId,
+    createdFrom: "manual_assign",
+    lastMatched: getTodayIsoDate(),
   });
 };
 
@@ -3716,21 +3613,14 @@ const getAutoTagForTransaction = (transaction) => {
   if (ruleMatch) {
     return { type: ruleMatch.targetType, targetId: ruleMatch.targetId };
   }
-  if (!isPotentialAssignableTransaction(transaction)) {
-    return { type: "unintentional" };
-  }
-  const billMatch = getBestMatchFromList(
-    budgetState.bills,
-    transaction,
-    "bill"
-  );
+  const normalizedDescription = normalizeMatchText(transaction.description);
+  const billMatch = getBestMatchFromList(budgetState.bills, normalizedDescription);
   if (billMatch) {
     return { type: "bill", targetId: billMatch.id };
   }
   const categoryMatch = getBestMatchFromList(
     budgetState.categories,
-    transaction,
-    "category"
+    normalizedDescription
   );
   if (categoryMatch) {
     return { type: "category", targetId: categoryMatch.id };
@@ -3812,14 +3702,13 @@ const importTransactionsFromCsv = (file) => {
     const headers = rows[0].map((header) => header.trim().toLowerCase());
     const getIndex = (matches) =>
       headers.findIndex((header) =>
-        matches.some((match) => header.includes(match))
+        matches.some((match) => header === match)
       );
-    const dateIndex = getIndex(["date", "posted"]);
-    const descriptionIndex = getIndex(["description", "memo", "payee"]);
+    const dateIndex = getIndex(["date", "posted date"]);
+    const descriptionIndex = getIndex(["description"]);
     const amountIndex = getIndex(["amount"]);
-    const debitIndex = getIndex(["debit", "withdrawal"]);
-    const creditIndex = getIndex(["credit", "deposit"]);
-    const typeIndex = getIndex(["transaction type", "type", "tran type", "txn type"]);
+    const indicatorIndex = getIndex(["credit debit indicator"]);
+    const typeIndex = getIndex(["type"]);
     const existingKeys = new Set(
       budgetState.transactions.map(
         (transaction) =>
@@ -3829,14 +3718,11 @@ const importTransactionsFromCsv = (file) => {
     const newTransactions = rows.slice(1).reduce((acc, row) => {
       const description = row[descriptionIndex] || "Transaction";
       const date = row[dateIndex] || "";
-      let amount = parseNumber(row[amountIndex]);
+      const amountRaw = parseNumber(row[amountIndex]);
+      const amount = amountRaw === null ? null : Math.abs(amountRaw);
+      const creditDebit = (row[indicatorIndex] || "").trim();
       const rawType = row[typeIndex] || "";
-      const transactionType = rawType.trim();
-      if (amount === null) {
-        const debit = parseNumber(row[debitIndex]) || 0;
-        const credit = parseNumber(row[creditIndex]) || 0;
-        amount = credit - debit;
-      }
+      const transactionType = rawType.trim() || creditDebit || null;
       if (amount === null) {
         return acc;
       }
