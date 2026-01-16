@@ -316,6 +316,37 @@ body[data-view="budget"] .sidebar {
   gap: 0.65rem;
 }
 
+.budget-selector__actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.budget-selector__row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.budget-selector__input {
+  flex: 1;
+  min-width: 180px;
+  padding: 0.6rem 0.75rem;
+  border-radius: 10px;
+  border: 1px solid #c8d1e3;
+  background: #f8f9ff;
+  font-weight: 600;
+}
+
+.budget-selector__action-button {
+  padding: 0.6rem 0.75rem;
+  border-radius: 10px;
+  border: 1px solid #c8d1e3;
+  background: #ffffff;
+  font-weight: 600;
+  cursor: pointer;
+}
+
 .budget-selector__label {
   margin: 0;
   font-size: 0.85rem;
@@ -2113,6 +2144,13 @@ body[data-view="budget"] .mini-toolbar {
 :root[data-theme="dark"] .budget-selector__new {
   background: #5d76d3;
   color: #f0f2fb;
+}
+
+:root[data-theme="dark"] .budget-selector__input,
+:root[data-theme="dark"] .budget-selector__action-button {
+  background: #242b3f;
+  border-color: #3a4566;
+  color: #e2e7f5;
 }
 
 :root[data-theme="dark"] .budget-selector__list button {
