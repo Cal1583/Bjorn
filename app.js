@@ -2352,14 +2352,32 @@ const isCreditOrTransferTransaction = (transaction) =>
 const isSpendTransaction = (transaction) =>
   getTransactionKind(transaction) === "payment";
 
+const getNormalizedTransactionAmount = (transaction) =>
+  Math.abs(transaction?.amount || 0);
+
 const getTransactionImpact = (transaction) => {
-  const amount = Math.abs(transaction?.amount || 0);
+  const amount = getNormalizedTransactionAmount(transaction);
   const kind = getTransactionKind(transaction);
   if (kind === "credit" || kind === "transfer") {
     return -amount;
   }
   return amount;
 };
+
+const getNetBalanceImpact = (transaction) => {
+  const amount = getNormalizedTransactionAmount(transaction);
+  const kind = getTransactionKind(transaction);
+  if (kind === "credit") {
+    return amount;
+  }
+  if (kind === "payment") {
+    return -amount;
+  }
+  return 0;
+};
+
+const getSpendAmount = (transaction) =>
+  isSpendTransaction(transaction) ? getNormalizedTransactionAmount(transaction) : 0;
 
 const formatTransactionAmount = (transaction) =>
   formatCurrency(getTransactionImpact(transaction));
@@ -2603,10 +2621,12 @@ const syncTransactionAssignmentFields = (transaction) => {
 
 const setTransactionAssignment = (transaction, { type, targetId }) => {
   const normalizedType = type || "unintentional";
-  if (normalizedType === "unintentional") {
+  const isSpend = isSpendTransaction(transaction);
+  const nextType = isSpend ? normalizedType : "unintentional";
+  if (nextType === "unintentional") {
     transaction.tag = { type: "unintentional" };
   } else {
-    transaction.tag = { type: normalizedType, targetId };
+    transaction.tag = { type: nextType, targetId };
   }
   syncTransactionAssignmentFields(transaction);
 };
@@ -2639,6 +2659,7 @@ const recomputeBudgetDerivedState = () => {
   const billsRemaining = budgetState.bills.filter((bill) => !bill.paid).length;
   const unintentionalTransactions = [];
   let totalSpent = 0;
+  let netBalance = 0;
 
   budgetState.categories.forEach((category) => {
     categorySpentTotals.set(category.id, 0);
@@ -2650,24 +2671,31 @@ const recomputeBudgetDerivedState = () => {
 
   budgetState.transactions.forEach((transaction) => {
     const kind = getTransactionKind(transaction);
-    if (kind === "payment") {
-      totalSpent += Math.abs(transaction?.amount || 0);
-    }
-    if (transaction.tag?.type === "bill" && transaction.tag?.targetId) {
+    totalSpent += getSpendAmount(transaction);
+    netBalance += getNetBalanceImpact(transaction);
+    if (
+      transaction.tag?.type === "bill" &&
+      transaction.tag?.targetId &&
+      kind === "payment"
+    ) {
       const current = billTransactionTotals.get(transaction.tag.targetId) || 0;
       billTransactionTotals.set(
         transaction.tag.targetId,
-        current + getTransactionImpact(transaction)
+        current + getSpendAmount(transaction)
       );
       const count = billTransactionCounts.get(transaction.tag.targetId) || 0;
       billTransactionCounts.set(transaction.tag.targetId, count + 1);
     }
-    if (transaction.tag?.type === "category" && transaction.tag?.targetId) {
+    if (
+      transaction.tag?.type === "category" &&
+      transaction.tag?.targetId &&
+      kind === "payment"
+    ) {
       const current =
         categorySpentTotals.get(transaction.tag.targetId) || 0;
       categorySpentTotals.set(
         transaction.tag.targetId,
-        current + getTransactionImpact(transaction)
+        current + getSpendAmount(transaction)
       );
     }
     if (
@@ -2687,7 +2715,9 @@ const recomputeBudgetDerivedState = () => {
     const transactionTotal = billTransactionTotals.get(bill.id) || 0;
     const transactionCount = billTransactionCounts.get(bill.id) || 0;
     const manualActual =
-      bill.actual === null || bill.actual === undefined ? null : bill.actual;
+      bill.actual === null || bill.actual === undefined
+        ? null
+        : Math.abs(bill.actual);
     const actual =
       transactionCount > 0 ? transactionTotal : manualActual;
     billActuals.set(bill.id, actual);
@@ -2711,7 +2741,6 @@ const recomputeBudgetDerivedState = () => {
 
   const totalBudget = billBudgetsTotal + categoryCapsTotal;
   const remainingBalance = totalBudget - totalSpent;
-  const netBalance = remainingBalance;
 
   budgetDerivedState = {
     billActuals,
@@ -2735,7 +2764,7 @@ const recomputeBudgetDerivedState = () => {
     },
     unintentionalTransactions,
     unintentionalTotal: unintentionalTransactions.reduce(
-      (sum, transaction) => sum + getTransactionImpact(transaction),
+      (sum, transaction) => sum + getSpendAmount(transaction),
       0
     ),
   };
@@ -2800,7 +2829,12 @@ const renderBudgetTotals = () => {
     {
       label: "Net Balance",
       value: formatCurrency(derived.netBalance),
-      tooltip: "Budgeted total minus transaction spending.",
+      tooltip: "Net impact of actual credits and debits.",
+    },
+    {
+      label: "Budgeted Total",
+      value: formatCurrency(derived.totalBudget),
+      tooltip: "Sum of all planned bill budgets and category caps.",
     },
     {
       label: "Loaded Transactions",
@@ -2816,11 +2850,6 @@ const renderBudgetTotals = () => {
       label: "Over Budget Bills",
       value: formatCurrency(derived.totalOverBudget),
       tooltip: "How far bills are over their budgeted amounts.",
-    },
-    {
-      label: "Remaining Balance",
-      value: formatCurrency(derived.remainingBalance),
-      tooltip: "Budgeted totals minus all transaction activity.",
     },
   ]
     .map(
@@ -2892,7 +2921,7 @@ const renderBudgetBills = () => {
     });
     actualInput.addEventListener("input", (event) => {
       const next = parseNumber(event.target.value);
-      bill.actual = next;
+      bill.actual = next === null ? null : Math.abs(next);
       saveBudgetState();
       renderBudgetTotals();
       updateBudgetBillTotalsRow(recomputeBudgetDerivedState());
@@ -2904,7 +2933,7 @@ const renderBudgetBills = () => {
       const next = parseNumber(event.target.value);
       const budget = bill.budget ?? 0;
       if (next !== null && next >= budget) {
-        bill.actual = next;
+        bill.actual = Math.abs(next);
         bill.paid = true;
         saveBudgetState();
         renderBudget();
@@ -3500,9 +3529,8 @@ const applyAutoTagsToTransactions = ({ onlyUnintentional = false } = {}) => {
       return;
     }
     setTransactionAssignment(transaction, nextTag);
-    if (nextTag.type !== "unintentional") {
-      transaction.reviewed = true;
-    }
+    transaction.reviewed =
+      transaction.tag?.type !== "unintentional" && isSpendTransaction(transaction);
   });
 };
 
@@ -3855,7 +3883,8 @@ if (budgetAddBillForm) {
     event.preventDefault();
     const name = event.target.billName.value.trim();
     const budget = parseNumber(event.target.billBudget.value) ?? 0;
-    const actual = parseNumber(event.target.billActual.value);
+    const actualRaw = parseNumber(event.target.billActual.value);
+    const actual = actualRaw === null ? null : Math.abs(actualRaw);
     const paid = event.target.billStatus.value === "paid";
     if (!name) {
       return;
