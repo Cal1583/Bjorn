@@ -2332,6 +2332,9 @@ const transactionTypeIncludes = (transactionType, matchers) =>
   matchers.some((matcher) => transactionType.includes(matcher));
 
 const getTransactionKind = (transaction) => {
+  if (transaction?.tag?.type === "bill" || transaction?.tag?.type === "category") {
+    return "payment";
+  }
   const normalized = normalizeTransactionType(transaction?.transactionType);
   if (transactionTypeIncludes(normalized, ["credit", "deposit", "refund"])) {
     return "credit";
@@ -2437,6 +2440,12 @@ const ensureBudgetState = () => {
     }
     if (!transaction.tag) {
       transaction.tag = { type: "unintentional" };
+    }
+    if (typeof transaction.reviewed !== "boolean") {
+      transaction.reviewed = false;
+    }
+    if (typeof transaction.autoAssigned !== "boolean") {
+      transaction.autoAssigned = false;
     }
     syncTransactionAssignmentFields(transaction);
   });
@@ -2583,12 +2592,183 @@ const navigateToPath = (path) => {
   setActiveModule(getModuleFromPath(normalized));
 };
 
-const getMatchFromList = (list, description) => {
-  const normalizedDescription = description.toLowerCase();
-  const matches = list
-    .filter((item) => item.name && normalizedDescription.includes(item.name.toLowerCase()))
-    .sort((a, b) => b.name.length - a.name.length);
-  return matches[0] || null;
+const normalizeMatchText = (value) => {
+  if (!value) {
+    return "";
+  }
+  return value
+    .toString()
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+};
+
+const getItemAliases = (item) => {
+  if (!item) {
+    return [];
+  }
+  const aliases = Array.isArray(item.aliases) ? item.aliases : [];
+  const keywords = Array.isArray(item.keywords) ? item.keywords : [];
+  const alias = item.alias ? [item.alias] : [];
+  return [...aliases, ...keywords, ...alias].filter(Boolean);
+};
+
+const getItemTypicalTypes = (item) => {
+  if (!item) {
+    return [];
+  }
+  if (Array.isArray(item.transactionTypes)) {
+    return item.transactionTypes;
+  }
+  if (Array.isArray(item.txnTypes)) {
+    return item.txnTypes;
+  }
+  if (item.transactionType) {
+    return [item.transactionType];
+  }
+  return [];
+};
+
+const getItemTargetAmount = (item, type) => {
+  if (!item) {
+    return null;
+  }
+  if (type === "bill") {
+    return item.budget ?? item.actual ?? null;
+  }
+  if (type === "category") {
+    return item.cap ?? null;
+  }
+  return null;
+};
+
+const getItemAmountTolerance = (item) => {
+  if (!item) {
+    return null;
+  }
+  if (typeof item.amountTolerance === "number") {
+    return item.amountTolerance;
+  }
+  if (typeof item.amountTolerancePercent === "number") {
+    return item.amountTolerancePercent / 100;
+  }
+  if (typeof item.tolerance === "number") {
+    return item.tolerance;
+  }
+  return null;
+};
+
+const getMatchRuleForDescription = (description) => {
+  const normalizedDescription = normalizeMatchText(description);
+  if (!normalizedDescription || !budgetState?.rules?.length) {
+    return null;
+  }
+  const candidates = budgetState.rules
+    .filter((rule) => rule?.match && rule?.targetType && rule?.targetId)
+    .map((rule) => ({
+      ...rule,
+      normalizedMatch: normalizeMatchText(rule.match),
+    }))
+    .filter((rule) => rule.normalizedMatch)
+    .filter((rule) => normalizedDescription.includes(rule.normalizedMatch))
+    .sort((a, b) => b.normalizedMatch.length - a.normalizedMatch.length);
+  if (!candidates.length) {
+    return null;
+  }
+  const top = candidates[0];
+  const tied = candidates.filter(
+    (candidate) =>
+      candidate.normalizedMatch.length === top.normalizedMatch.length &&
+      candidate.targetId !== top.targetId
+  );
+  if (tied.length) {
+    return null;
+  }
+  if (top.targetType === "bill") {
+    const exists = budgetState.bills.some((bill) => bill.id === top.targetId);
+    return exists ? top : null;
+  }
+  if (top.targetType === "category") {
+    const exists = budgetState.categories.some(
+      (category) => category.id === top.targetId
+    );
+    return exists ? top : null;
+  }
+  return null;
+};
+
+const getMatchScore = (transaction, item, type) => {
+  const normalizedDescription = normalizeMatchText(transaction.description);
+  const normalizedName = normalizeMatchText(item.name);
+  let score = 0;
+  if (normalizedName && normalizedDescription.includes(normalizedName)) {
+    score += 5;
+  }
+  const aliases = getItemAliases(item)
+    .map((alias) => normalizeMatchText(alias))
+    .filter(Boolean);
+  if (aliases.some((alias) => normalizedDescription.includes(alias))) {
+    score += 5;
+  }
+  const amount = getNormalizedTransactionAmount(transaction);
+  const targetAmount = getItemTargetAmount(item, type);
+  if (targetAmount !== null && targetAmount !== undefined) {
+    const normalizedTarget = Math.abs(targetAmount);
+    if (amount === normalizedTarget) {
+      score += 2;
+    } else {
+      const tolerance = getItemAmountTolerance(item);
+      if (typeof tolerance === "number" && tolerance > 0) {
+        const allowance =
+          tolerance <= 1 ? normalizedTarget * tolerance : tolerance;
+        if (Math.abs(amount - normalizedTarget) <= allowance) {
+          score += 1;
+        }
+      }
+    }
+  }
+  const normalizedType = normalizeTransactionType(transaction?.transactionType);
+  const typicalTypes = getItemTypicalTypes(item)
+    .map((entry) => normalizeMatchText(entry))
+    .filter(Boolean);
+  if (
+    normalizedType &&
+    typicalTypes.some((entry) => normalizedType.includes(entry))
+  ) {
+    score += 1;
+  }
+  return score;
+};
+
+const getBestMatchFromList = (list, transaction, type) => {
+  const threshold = 6;
+  const scored = list
+    .map((item) => ({
+      item,
+      score: getMatchScore(transaction, item, type),
+    }))
+    .filter((entry) => entry.score >= threshold)
+    .sort((a, b) => b.score - a.score);
+  if (!scored.length) {
+    return null;
+  }
+  const top = scored[0];
+  const tied = scored.filter(
+    (entry) => entry.score === top.score && entry.item.id !== top.item.id
+  );
+  if (tied.length) {
+    return null;
+  }
+  return top.item;
+};
+
+const isPotentialAssignableTransaction = (transaction) => {
+  const normalizedType = normalizeTransactionType(transaction?.transactionType);
+  if (transactionTypeIncludes(normalizedType, ["transfer", "ach"])) {
+    return true;
+  }
+  return getTransactionKind(transaction) === "payment";
 };
 
 const getTagLabel = (tag) => {
@@ -2621,14 +2801,33 @@ const syncTransactionAssignmentFields = (transaction) => {
 
 const setTransactionAssignment = (transaction, { type, targetId }) => {
   const normalizedType = type || "unintentional";
-  const isSpend = isSpendTransaction(transaction);
-  const nextType = isSpend ? normalizedType : "unintentional";
-  if (nextType === "unintentional") {
-    transaction.tag = { type: "unintentional" };
+  if (normalizedType === "bill" || normalizedType === "category") {
+    transaction.tag = { type: normalizedType, targetId };
   } else {
-    transaction.tag = { type: nextType, targetId };
+    transaction.tag = { type: "unintentional" };
   }
   syncTransactionAssignmentFields(transaction);
+};
+
+const upsertMatchRule = (description, { type, targetId }) => {
+  const normalizedMatch = normalizeMatchText(description);
+  if (!normalizedMatch || !type || !targetId) {
+    return;
+  }
+  const existing = budgetState.rules.find(
+    (rule) => normalizeMatchText(rule.match) === normalizedMatch
+  );
+  if (existing) {
+    existing.targetType = type;
+    existing.targetId = targetId;
+    return;
+  }
+  budgetState.rules.push({
+    id: createBudgetId("rule"),
+    match: normalizedMatch,
+    targetType: type,
+    targetId,
+  });
 };
 
 const setCategoryCollapsed = (categoryId, isCollapsed) => {
@@ -2957,6 +3156,7 @@ const renderBudgetBills = () => {
         ) {
           setTransactionAssignment(transaction, { type: "unintentional" });
           transaction.reviewed = false;
+          transaction.autoAssigned = false;
         }
       });
       saveBudgetState();
@@ -3053,6 +3253,7 @@ const renderBudgetCategories = () => {
           ) {
             setTransactionAssignment(transaction, { type: "unintentional" });
             transaction.reviewed = false;
+            transaction.autoAssigned = false;
           }
         });
         saveBudgetState();
@@ -3094,14 +3295,15 @@ const renderBudgetCategories = () => {
         const clearButton = transactionRow.querySelector(
           '[data-action="clear"]'
         );
-        if (clearButton) {
-          clearButton.addEventListener("click", () => {
-            setTransactionAssignment(transaction, { type: "unintentional" });
-            transaction.reviewed = false;
-            saveBudgetState();
-            renderBudget();
-          });
-        }
+          if (clearButton) {
+            clearButton.addEventListener("click", () => {
+              setTransactionAssignment(transaction, { type: "unintentional" });
+              transaction.reviewed = false;
+              transaction.autoAssigned = false;
+              saveBudgetState();
+              renderBudget();
+            });
+          }
         transactionList.appendChild(transactionRow);
       });
       group.appendChild(transactionList);
@@ -3242,6 +3444,8 @@ const renderBudgetUnintentional = () => {
         }
         setTransactionAssignment(transaction, { type, targetId });
         transaction.reviewed = true;
+        transaction.autoAssigned = false;
+        upsertMatchRule(transaction.description, { type, targetId });
         assignmentFeedback.set(transaction.id, {
           label: "Assigned ✓",
           expiresAt: Date.now() + 700,
@@ -3469,6 +3673,11 @@ const renderBudgetTransactions = () => {
         return;
       }
       setTransactionAssignment(transaction, { type, targetId });
+      if (type !== "unintentional") {
+        transaction.reviewed = true;
+        transaction.autoAssigned = false;
+        upsertMatchRule(transaction.description, { type, targetId });
+      }
       saveBudgetState();
       const label = getTagLabel(transaction.tag);
       assignmentFeedback.set(transaction.id, {
@@ -3491,6 +3700,7 @@ const renderBudgetTransactions = () => {
     row.querySelector('[data-action="clear"]').addEventListener("click", () => {
       setTransactionAssignment(transaction, { type: "unintentional" });
       transaction.reviewed = false;
+      transaction.autoAssigned = false;
       saveBudgetState();
       renderBudget();
     });
@@ -3498,12 +3708,30 @@ const renderBudgetTransactions = () => {
   });
 };
 
-const getAutoTagForTransaction = ({ description }) => {
-  const billMatch = getMatchFromList(budgetState.bills, description);
+const getAutoTagForTransaction = (transaction) => {
+  if (!transaction?.description) {
+    return { type: "unintentional" };
+  }
+  const ruleMatch = getMatchRuleForDescription(transaction.description);
+  if (ruleMatch) {
+    return { type: ruleMatch.targetType, targetId: ruleMatch.targetId };
+  }
+  if (!isPotentialAssignableTransaction(transaction)) {
+    return { type: "unintentional" };
+  }
+  const billMatch = getBestMatchFromList(
+    budgetState.bills,
+    transaction,
+    "bill"
+  );
   if (billMatch) {
     return { type: "bill", targetId: billMatch.id };
   }
-  const categoryMatch = getMatchFromList(budgetState.categories, description);
+  const categoryMatch = getBestMatchFromList(
+    budgetState.categories,
+    transaction,
+    "category"
+  );
   if (categoryMatch) {
     return { type: "category", targetId: categoryMatch.id };
   }
@@ -3518,9 +3746,7 @@ const applyAutoTagsToTransactions = ({ onlyUnintentional = false } = {}) => {
     if (onlyUnintentional && transaction.tag?.type !== "unintentional") {
       return;
     }
-    const nextTag = getAutoTagForTransaction({
-      description: transaction.description,
-    });
+    const nextTag = getAutoTagForTransaction(transaction);
     if (
       transaction.tag?.type === nextTag.type &&
       transaction.tag?.targetId === nextTag.targetId
@@ -3529,8 +3755,8 @@ const applyAutoTagsToTransactions = ({ onlyUnintentional = false } = {}) => {
       return;
     }
     setTransactionAssignment(transaction, nextTag);
-    transaction.reviewed =
-      transaction.tag?.type !== "unintentional" && isSpendTransaction(transaction);
+    transaction.autoAssigned = transaction.tag?.type !== "unintentional";
+    transaction.reviewed = transaction.tag?.type !== "unintentional";
   });
 };
 
@@ -3618,7 +3844,11 @@ const importTransactionsFromCsv = (file) => {
       if (existingKeys.has(key)) {
         return acc;
       }
-      const autoTag = getAutoTagForTransaction({ description });
+      const autoTag = getAutoTagForTransaction({
+        description,
+        amount,
+        transactionType,
+      });
       const transaction = {
         id: createBudgetId("txn"),
         date,
@@ -3626,6 +3856,7 @@ const importTransactionsFromCsv = (file) => {
         amount,
         transactionType: transactionType || null,
         reviewed: autoTag.type !== "unintentional",
+        autoAssigned: autoTag.type !== "unintentional",
         tag: autoTag,
       };
       syncTransactionAssignmentFields(transaction);
@@ -3940,6 +4171,7 @@ if (budgetAddTransactionForm) {
       amount: Math.abs(amount),
       transactionType,
       reviewed: false,
+      autoAssigned: false,
       tag: { type: "unintentional" },
     });
     syncTransactionAssignmentFields(budgetState.transactions[0]);
