@@ -13,35 +13,105 @@
           <span class="sidebar__app-name">Bjorn</span>
         </div>
         <div class="sidebar__section sidebar__section--budget">
-          <p class="sidebar__label">Budget controls</p>
-          <button type="button" id="budget-new-sidebar">New budget</button>
-          <button type="button" id="budget-main-menu">Main menu</button>
-          <button type="button" id="budget-import-csv">
+          <p class="sidebar__label" data-tooltip="Budget workspace controls.">
+            Budget controls
+          </p>
+          <button
+            type="button"
+            id="budget-new-sidebar"
+            data-tooltip="Start a new budget workspace."
+          >
+            New budget
+          </button>
+          <button
+            type="button"
+            id="budget-main-menu"
+            data-tooltip="Return to the main menu."
+          >
+            Main menu
+          </button>
+          <button
+            type="button"
+            id="budget-import-csv"
+            data-tooltip="Load transaction activity from a CSV file."
+          >
             Import transaction CSV
           </button>
-          <button type="button" id="budget-import-json">
+          <button
+            type="button"
+            id="budget-import-json"
+            data-tooltip="Load a saved budget JSON file."
+          >
             Import budget JSON
           </button>
-          <button type="button" id="budget-export-json">
+          <button
+            type="button"
+            id="budget-export-json"
+            data-tooltip="Export the current budget as JSON."
+          >
             Export budget JSON
+          </button>
+          <button
+            type="button"
+            id="toggle-tooltips"
+            data-tooltip="Toggle hover tooltips throughout the budget."
+          >
+            Show Tool Tips
           </button>
           <hr class="sidebar__divider sidebar__divider--budget" />
           <div class="sidebar__budget-tools" id="budget-tools"></div>
         </div>
         <div class="sidebar__section sidebar__section--vefa">
-          <button id="new-project">New project</button>
-          <button id="open-project">Open...</button>
-          <button id="save-project">Save</button>
-          <button id="save-project-as">Save as...</button>
-          <button id="open-model">Model view</button>
-          <button id="open-colors">Edit colors</button>
+          <button id="new-project" data-tooltip="Start a new class model.">
+            New project
+          </button>
+          <button id="open-project" data-tooltip="Open a saved project file.">
+            Open...
+          </button>
+          <button id="save-project" data-tooltip="Save the current project.">
+            Save
+          </button>
+          <button
+            id="save-project-as"
+            data-tooltip="Save the project with a new file name."
+          >
+            Save as...
+          </button>
+          <button id="open-model" data-tooltip="View the model JSON output.">
+            Model view
+          </button>
+          <button
+            id="open-colors"
+            data-tooltip="Adjust the diagram color palette."
+          >
+            Edit colors
+          </button>
         </div>
         <div class="sidebar__section sidebar__section--vefa">
-          <button id="add-class">Add Class</button>
-          <button id="add-subclass">Add Subclass</button>
-          <button id="create-instance">Create Instance</button>
-          <button id="create-core-instance">Create Core</button>
-          <button id="create-half-core">Create Half-Core</button>
+          <button id="add-class" data-tooltip="Add a new class node.">
+            Add Class
+          </button>
+          <button id="add-subclass" data-tooltip="Add a subclass node.">
+            Add Subclass
+          </button>
+          <button
+            id="create-instance"
+            data-tooltip="Create an instance from a class."
+          >
+            Create Instance
+          </button>
+          <button
+            id="create-core-instance"
+            data-tooltip="Create a core instance node."
+          >
+            Create Core
+          </button>
+          <button
+            id="create-half-core"
+            data-tooltip="Create a half-core instance."
+          >
+            Create Half-Core
+          </button>
         </div>
         <div class="sidebar__section sidebar__section--vefa">
           <p class="sidebar__label">Set relationship</p>
@@ -49,21 +119,21 @@
             <button
               type="button"
               data-relationship-type="one-to-many"
-              title="Set a one-to-many relationship"
+              data-tooltip="Set a one-to-many relationship"
             >
               1 → *
             </button>
             <button
               type="button"
               data-relationship-type="many-to-many"
-              title="Set a many-to-many relationship"
+              data-tooltip="Set a many-to-many relationship"
             >
               * ↔ *
             </button>
             <button
               type="button"
               data-relationship-type="parent-child"
-              title="Set a parent-child relationship"
+              data-tooltip="Set a parent-child relationship"
             >
               ⤴
             </button>
@@ -78,11 +148,19 @@
           </p>
         </div>
         <div class="sidebar__section sidebar__section--vefa">
-          <button id="open-legend">Legend</button>
+          <button id="open-legend" data-tooltip="Open the schema legend.">
+            Legend
+          </button>
         </div>
         <div class="sidebar__section sidebar__section--vefa">
           <p class="sidebar__label">Modules</p>
-          <button id="open-budget" aria-pressed="false">Budget</button>
+          <button
+            id="open-budget"
+            aria-pressed="false"
+            data-tooltip="Switch to the budget workspace."
+          >
+            Budget
+          </button>
         </div>
         <div class="sidebar__status" id="status"></div>
       </aside>
@@ -191,6 +269,10 @@
                 Track monthly bills, category caps, and transaction review.
               </p>
             </div>
+            <div class="budget-net-balance" id="budget-net-balance">
+              <span>Net balance</span>
+              <strong>$0.00</strong>
+            </div>
           </header>
           <div class="budget-grid">
             <section class="budget-panel" id="budget-totals-panel">
@@ -270,23 +352,6 @@
                   <span>Grocer</span>
                   <span>Food</span>
                   <span>$45.20</span>
-                </div>
-              </div>
-            </section>
-            <section class="budget-panel" id="budget-deposits-panel">
-              <header class="budget-panel__header">
-                <h2>Deposits</h2>
-              </header>
-              <div class="budget-table" id="budget-deposits-summary">
-                <div class="budget-row budget-row--header budget-row--categories">
-                  <span>Source</span>
-                  <span>Account</span>
-                  <span>Amount</span>
-                </div>
-                <div class="budget-row budget-row--categories">
-                  <span>Employer</span>
-                  <span>Checking</span>
-                  <span>$2,450.00</span>
                 </div>
               </div>
             </section>
