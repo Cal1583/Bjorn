@@ -2545,6 +2545,11 @@ const renderBudgetBills = () => {
       saveBudgetState();
       renderBudget();
     });
+    nameInput.addEventListener("change", () => {
+      applyAutoTagsToTransactions({ onlyUnintentional: true });
+      saveBudgetState();
+      renderBudget();
+    });
     budgetInput.addEventListener("input", (event) => {
       const next = parseNumber(event.target.value);
       bill.budget = next ?? 0;
@@ -2607,6 +2612,11 @@ const renderBudgetCategories = () => {
     const [nameInput, capInput] = row.querySelectorAll("input");
     nameInput.addEventListener("input", (event) => {
       category.name = event.target.value;
+      saveBudgetState();
+      renderBudget();
+    });
+    nameInput.addEventListener("change", () => {
+      applyAutoTagsToTransactions({ onlyUnintentional: true });
       saveBudgetState();
       renderBudget();
     });
@@ -2777,6 +2787,30 @@ const getAutoTagForTransaction = ({ description }) => {
   return { type: "unintentional" };
 };
 
+const applyAutoTagsToTransactions = ({ onlyUnintentional = false } = {}) => {
+  budgetState.transactions.forEach((transaction) => {
+    if (!transaction.description) {
+      return;
+    }
+    if (onlyUnintentional && transaction.tag?.type !== "unintentional") {
+      return;
+    }
+    const nextTag = getAutoTagForTransaction({
+      description: transaction.description,
+    });
+    if (
+      transaction.tag?.type === nextTag.type &&
+      transaction.tag?.targetId === nextTag.targetId
+    ) {
+      return;
+    }
+    transaction.tag = nextTag;
+    if (nextTag.type !== "unintentional") {
+      transaction.reviewed = true;
+    }
+  });
+};
+
 const parseCsv = (text) => {
   const rows = [];
   let current = [];
@@ -2858,19 +2892,21 @@ const importTransactionsFromCsv = (file) => {
       if (existingKeys.has(key)) {
         return acc;
       }
+      const autoTag = getAutoTagForTransaction({ description });
       const transaction = {
         id: createBudgetId("txn"),
         date,
         description,
         amount,
-        reviewed: false,
-        tag: getAutoTagForTransaction({ description }),
+        reviewed: autoTag.type !== "unintentional",
+        tag: autoTag,
       };
       acc.push(transaction);
       existingKeys.add(key);
       return acc;
     }, []);
     budgetState.transactions = [...newTransactions, ...budgetState.transactions];
+    applyAutoTagsToTransactions({ onlyUnintentional: true });
     saveBudgetState();
     renderBudget();
     if (newTransactions.length) {
@@ -3103,6 +3139,7 @@ if (budgetAddBillForm) {
       actual,
       paid,
     });
+    applyAutoTagsToTransactions({ onlyUnintentional: true });
     event.target.reset();
     saveBudgetState();
     renderBudget();
@@ -3122,6 +3159,7 @@ if (budgetAddCategoryForm) {
       name,
       cap,
     });
+    applyAutoTagsToTransactions({ onlyUnintentional: true });
     event.target.reset();
     saveBudgetState();
     renderBudget();
