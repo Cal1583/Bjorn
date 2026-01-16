@@ -342,18 +342,31 @@
               <header class="budget-panel__header">
                 <h2>Transactions</h2>
               </header>
-              <div class="budget-table" id="budget-transactions-summary">
-                <div class="budget-row budget-row--header budget-row--categories">
-                  <span>Payee</span>
-                  <span>Category</span>
-                  <span>Amount</span>
-                </div>
-                <div class="budget-row budget-row--categories">
-                  <span>Grocer</span>
-                  <span>Food</span>
-                  <span>$45.20</span>
-                </div>
-              </div>
+              <div class="budget-table" id="budget-transactions-summary"></div>
+              <form
+                class="budget-form budget-form--inline"
+                id="budget-add-transaction"
+              >
+                <input
+                  type="text"
+                  name="transactionPayee"
+                  placeholder="Payee"
+                  required
+                />
+                <input
+                  type="number"
+                  name="transactionAmount"
+                  step="0.01"
+                  placeholder="Amount"
+                  required
+                />
+                <select name="transactionType" required>
+                  <option value="Credit">Credit</option>
+                  <option value="Transfer">Transfer</option>
+                </select>
+                <input type="date" name="transactionDate" />
+                <button type="submit">Add transfer/credit</button>
+              </form>
             </section>
             <section
               class="budget-panel budget-panel--wide"

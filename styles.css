@@ -1346,6 +1346,10 @@ body[data-view="budget"] .mini-toolbar {
   grid-template-columns: 1.5fr 0.9fr 0.9fr 0.5fr;
 }
 
+.budget-row--summary {
+  grid-template-columns: 1.4fr 0.9fr 0.8fr 0.9fr 0.5fr;
+}
+
 .budget-row--header {
   font-size: 0.8rem;
   text-transform: uppercase;
