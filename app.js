@@ -119,6 +119,7 @@ let budgetFilterMode = "all";
 let budgetSearchQuery = "";
 let tooltipsEnabled = true;
 let collapsedCategoryIds = new Set();
+let budgetDerivedState = null;
 
 const assignmentFeedback = new Map();
 
@@ -2564,29 +2565,6 @@ const navigateToPath = (path) => {
   setActiveModule(getModuleFromPath(normalized));
 };
 
-const getBillActual = (bill) => {
-  const actualFromTransactions = budgetState.transactions
-    .filter(
-      (transaction) =>
-        transaction.tag?.type === "bill" &&
-        transaction.tag?.targetId === bill.id
-    )
-    .reduce((sum, transaction) => sum + getTransactionImpact(transaction), 0);
-  if (bill.actual === null || bill.actual === undefined) {
-    return actualFromTransactions;
-  }
-  return bill.actual + actualFromTransactions;
-};
-
-const getCategorySpent = (category) =>
-  budgetState.transactions
-    .filter(
-      (transaction) =>
-        transaction.tag?.type === "category" &&
-        transaction.tag?.targetId === category.id
-    )
-    .reduce((sum, transaction) => sum + getTransactionImpact(transaction), 0);
-
 const getMatchFromList = (list, description) => {
   const normalizedDescription = description.toLowerCase();
   const matches = list
@@ -2641,62 +2619,207 @@ const setCategoryCollapsed = (categoryId, isCollapsed) => {
   }
 };
 
+const recomputeBudgetDerivedState = () => {
+  if (!budgetState) {
+    budgetDerivedState = null;
+    return null;
+  }
+  const billTransactionTotals = new Map();
+  const billTransactionCounts = new Map();
+  const categorySpentTotals = new Map();
+  const billBudgetsTotal = budgetState.bills.reduce(
+    (sum, bill) => sum + (bill.budget || 0),
+    0
+  );
+  const categoryCapsTotal = budgetState.categories.reduce(
+    (sum, category) => sum + (category.cap || 0),
+    0
+  );
+  const totalTransactions = budgetState.transactions.length;
+  const billsRemaining = budgetState.bills.filter((bill) => !bill.paid).length;
+  const unintentionalTransactions = [];
+  let totalSpent = 0;
+
+  budgetState.categories.forEach((category) => {
+    categorySpentTotals.set(category.id, 0);
+  });
+  budgetState.bills.forEach((bill) => {
+    billTransactionTotals.set(bill.id, 0);
+    billTransactionCounts.set(bill.id, 0);
+  });
+
+  budgetState.transactions.forEach((transaction) => {
+    const kind = getTransactionKind(transaction);
+    if (kind === "payment") {
+      totalSpent += Math.abs(transaction?.amount || 0);
+    }
+    if (transaction.tag?.type === "bill" && transaction.tag?.targetId) {
+      const current = billTransactionTotals.get(transaction.tag.targetId) || 0;
+      billTransactionTotals.set(
+        transaction.tag.targetId,
+        current + getTransactionImpact(transaction)
+      );
+      const count = billTransactionCounts.get(transaction.tag.targetId) || 0;
+      billTransactionCounts.set(transaction.tag.targetId, count + 1);
+    }
+    if (transaction.tag?.type === "category" && transaction.tag?.targetId) {
+      const current =
+        categorySpentTotals.get(transaction.tag.targetId) || 0;
+      categorySpentTotals.set(
+        transaction.tag.targetId,
+        current + getTransactionImpact(transaction)
+      );
+    }
+    if (
+      transaction.tag?.type === "unintentional" &&
+      kind === "payment"
+    ) {
+      unintentionalTransactions.push(transaction);
+    }
+  });
+
+  const billActuals = new Map();
+  let billActualsTotal = 0;
+  let totalOverBudget = 0;
+  let paidBills = 0;
+
+  budgetState.bills.forEach((bill) => {
+    const transactionTotal = billTransactionTotals.get(bill.id) || 0;
+    const transactionCount = billTransactionCounts.get(bill.id) || 0;
+    const manualActual =
+      bill.actual === null || bill.actual === undefined ? null : bill.actual;
+    const actual =
+      transactionCount > 0 ? transactionTotal : manualActual;
+    billActuals.set(bill.id, actual);
+    if (actual !== null && actual !== undefined) {
+      billActualsTotal += actual;
+      const budget = bill.budget || 0;
+      if (actual > budget) {
+        totalOverBudget += actual - budget;
+      }
+    }
+    if (bill.paid) {
+      paidBills += 1;
+    }
+  });
+
+  let categorySpentTotal = 0;
+  budgetState.categories.forEach((category) => {
+    const spent = categorySpentTotals.get(category.id) || 0;
+    categorySpentTotal += spent;
+  });
+
+  const totalBudget = billBudgetsTotal + categoryCapsTotal;
+  const remainingBalance = totalBudget - totalSpent;
+  const netBalance = remainingBalance;
+
+  budgetDerivedState = {
+    billActuals,
+    categorySpentTotals,
+    totalTransactions,
+    billsRemaining,
+    totalBudget,
+    totalSpent,
+    remainingBalance,
+    netBalance,
+    totalOverBudget,
+    billTotals: {
+      budget: billBudgetsTotal,
+      actual: billActualsTotal,
+      paid: paidBills,
+      count: budgetState.bills.length,
+    },
+    categoryTotals: {
+      cap: categoryCapsTotal,
+      spent: categorySpentTotal,
+    },
+    unintentionalTransactions,
+    unintentionalTotal: unintentionalTransactions.reduce(
+      (sum, transaction) => sum + getTransactionImpact(transaction),
+      0
+    ),
+  };
+  return budgetDerivedState;
+};
+
+const updateBudgetBillTotalsRow = (derived) => {
+  if (!budgetBillsTable || !derived) {
+    return;
+  }
+  const row = budgetBillsTable.querySelector(".budget-row--totals");
+  if (!row) {
+    return;
+  }
+  const budgetTotal = row.querySelector('[data-role="bills-budget-total"]');
+  const actualTotal = row.querySelector('[data-role="bills-actual-total"]');
+  const statusTotal = row.querySelector('[data-role="bills-status-total"]');
+  if (budgetTotal) {
+    budgetTotal.textContent = formatCurrency(derived.billTotals.budget);
+  }
+  if (actualTotal) {
+    actualTotal.textContent = formatCurrency(derived.billTotals.actual);
+  }
+  if (statusTotal) {
+    statusTotal.textContent = `${derived.billTotals.paid}/${derived.billTotals.count} Paid`;
+  }
+};
+
+const updateBudgetCategoryTotalsRow = (derived) => {
+  if (!budgetCategoriesTable || !derived) {
+    return;
+  }
+  const row = budgetCategoriesTable.querySelector(".budget-row--totals");
+  if (!row) {
+    return;
+  }
+  const capTotal = row.querySelector('[data-role="categories-cap-total"]');
+  const spentTotal = row.querySelector('[data-role="categories-spent-total"]');
+  if (capTotal) {
+    capTotal.textContent = formatCurrency(derived.categoryTotals.cap);
+  }
+  if (spentTotal) {
+    spentTotal.textContent = formatCurrency(derived.categoryTotals.spent);
+  }
+};
+
 const renderBudgetTotals = () => {
   if (!budgetTotals) {
     return;
   }
-  const totalTransactions = budgetState.transactions.length;
-  const billsRemaining = budgetState.bills.filter((bill) => !bill.paid).length;
-  const totalBudget =
-    budgetState.bills.reduce((sum, bill) => sum + (bill.budget || 0), 0) +
-    budgetState.categories.reduce(
-      (sum, category) => sum + (category.cap || 0),
-      0
-    );
-  const totalSpent = budgetState.transactions.reduce(
-    (sum, transaction) => sum + getTransactionImpact(transaction),
-    0
-  );
-  const remainingBalance = totalBudget - totalSpent;
-  const netBalance = remainingBalance;
-  const totalOverBudget = budgetState.bills.reduce((sum, bill) => {
-    const actual = getBillActual(bill);
-    const budget = bill.budget || 0;
-    if (actual === null || actual === undefined) {
-      return sum;
-    }
-    return actual > budget ? sum + (actual - budget) : sum;
-  }, 0);
+  const derived = recomputeBudgetDerivedState();
+  if (!derived) {
+    return;
+  }
   if (budgetNetBalance) {
     const netValue = budgetNetBalance.querySelector("strong");
     if (netValue) {
-      netValue.textContent = formatCurrency(netBalance);
+      netValue.textContent = formatCurrency(derived.netBalance);
     }
   }
   budgetTotals.innerHTML = [
     {
       label: "Net Balance",
-      value: formatCurrency(netBalance),
+      value: formatCurrency(derived.netBalance),
       tooltip: "Budgeted total minus transaction spending.",
     },
     {
       label: "Loaded Transactions",
-      value: totalTransactions.toString(),
+      value: derived.totalTransactions.toString(),
       tooltip: "Number of transactions currently loaded.",
     },
     {
       label: "Bills Remaining",
-      value: billsRemaining.toString(),
+      value: derived.billsRemaining.toString(),
       tooltip: "Bills still marked as unpaid.",
     },
     {
       label: "Over Budget Bills",
-      value: formatCurrency(totalOverBudget),
+      value: formatCurrency(derived.totalOverBudget),
       tooltip: "How far bills are over their budgeted amounts.",
     },
     {
       label: "Remaining Balance",
-      value: formatCurrency(remainingBalance),
+      value: formatCurrency(derived.remainingBalance),
       tooltip: "Budgeted totals minus all transaction activity.",
     },
   ]
@@ -2713,6 +2836,10 @@ const renderBudgetBills = () => {
   if (!budgetBillsTable) {
     return;
   }
+  const derived = recomputeBudgetDerivedState();
+  if (!derived) {
+    return;
+  }
   budgetBillsTable.innerHTML = "";
   const headerRow = document.createElement("div");
   headerRow.className = "budget-row budget-row--header budget-row--bills";
@@ -2727,7 +2854,7 @@ const renderBudgetBills = () => {
   budgetState.bills.forEach((bill) => {
     const row = document.createElement("div");
     row.className = "budget-row budget-row--bills";
-    const actualValue = getBillActual(bill);
+    const actualValue = derived.billActuals.get(bill.id);
     row.innerHTML = `
       <input type="text" value="${bill.name}" />
       <input type="number" step="0.01" min="0" value="${bill.budget ?? ""}" />
@@ -2761,12 +2888,14 @@ const renderBudgetBills = () => {
       bill.budget = next ?? 0;
       saveBudgetState();
       renderBudgetTotals();
+      updateBudgetBillTotalsRow(recomputeBudgetDerivedState());
     });
     actualInput.addEventListener("input", (event) => {
       const next = parseNumber(event.target.value);
       bill.actual = next;
       saveBudgetState();
       renderBudgetTotals();
+      updateBudgetBillTotalsRow(recomputeBudgetDerivedState());
     });
     actualInput.addEventListener("keydown", (event) => {
       if (event.key !== "Enter") {
@@ -2785,6 +2914,7 @@ const renderBudgetBills = () => {
       bill.paid = paidInput.checked;
       saveBudgetState();
       renderBudgetTotals();
+      updateBudgetBillTotalsRow(recomputeBudgetDerivedState());
       renderBudgetBills();
     });
     deleteButton.addEventListener("click", () => {
@@ -2805,10 +2935,30 @@ const renderBudgetBills = () => {
     });
     budgetBillsTable.appendChild(row);
   });
+  const totalsRow = document.createElement("div");
+  totalsRow.className = "budget-row budget-row--bills budget-row--totals";
+  totalsRow.innerHTML = `
+    <div><strong>Totals</strong></div>
+    <div data-role="bills-budget-total">${formatCurrency(
+      derived.billTotals.budget
+    )}</div>
+    <div data-role="bills-actual-total">${formatCurrency(
+      derived.billTotals.actual
+    )}</div>
+    <div data-role="bills-status-total">${derived.billTotals.paid}/${
+    derived.billTotals.count
+  } Paid</div>
+    <div></div>
+  `;
+  budgetBillsTable.appendChild(totalsRow);
 };
 
 const renderBudgetCategories = () => {
   if (!budgetCategoriesTable) {
+    return;
+  }
+  const derived = recomputeBudgetDerivedState();
+  if (!derived) {
     return;
   }
   budgetCategoriesTable.innerHTML = "";
@@ -2828,7 +2978,7 @@ const renderBudgetCategories = () => {
     group.classList.toggle("is-collapsed", isCollapsed);
     const row = document.createElement("div");
     row.className = "budget-row budget-row--categories";
-    const spent = getCategorySpent(category);
+    const spent = derived.categorySpentTotals.get(category.id) || 0;
     row.innerHTML = `
       <input type="text" value="${category.name}" />
       <input type="number" step="0.01" min="0" value="${
@@ -2860,6 +3010,7 @@ const renderBudgetCategories = () => {
       category.cap = next ?? 0;
       saveBudgetState();
       renderBudgetTotals();
+      updateBudgetCategoryTotalsRow(recomputeBudgetDerivedState());
     });
     if (deleteButton) {
       deleteButton.addEventListener("click", () => {
@@ -2928,21 +3079,30 @@ const renderBudgetCategories = () => {
     }
     budgetCategoriesTable.appendChild(group);
   });
+  const totalsRow = document.createElement("div");
+  totalsRow.className = "budget-row budget-row--categories budget-row--totals";
+  totalsRow.innerHTML = `
+    <div><strong>Totals</strong></div>
+    <div data-role="categories-cap-total">${formatCurrency(
+      derived.categoryTotals.cap
+    )}</div>
+    <div data-role="categories-spent-total">${formatCurrency(
+      derived.categoryTotals.spent
+    )}</div>
+    <div></div>
+  `;
+  budgetCategoriesTable.appendChild(totalsRow);
 };
 
 const renderBudgetUnintentional = () => {
   if (!budgetUnintentional) {
     return;
   }
-  const unintentionalTransactions = budgetState.transactions.filter(
-    (transaction) =>
-      transaction.tag?.type === "unintentional" && isSpendTransaction(transaction)
-  );
-  const total = unintentionalTransactions.reduce(
-    (sum, transaction) => sum + getTransactionImpact(transaction),
-    0
-  );
-  const list = unintentionalTransactions.slice(0, 5);
+  const derived = recomputeBudgetDerivedState();
+  if (!derived) {
+    return;
+  }
+  const list = derived.unintentionalTransactions;
   const billOptions = budgetState.bills
     .map(
       (bill) => `<option value="bill:${bill.id}">${bill.name}</option>`
@@ -2968,8 +3128,8 @@ const renderBudgetUnintentional = () => {
     : `<option value="">No bills or categories</option>`;
   budgetUnintentional.innerHTML = `
     <div class="budget-unintentional__summary">
-      <strong>${formatCurrency(total)}</strong>
-      <span>${unintentionalTransactions.length} transactions</span>
+      <strong>${formatCurrency(derived.unintentionalTotal)}</strong>
+      <span>${list.length} transactions</span>
     </div>
     <div class="budget-unintentional__list">
       ${list
@@ -3013,6 +3173,21 @@ const renderBudgetUnintentional = () => {
       if (!toggle || !select) {
         return;
       }
+      const feedback = assignmentFeedback.get(item.dataset.transactionId);
+      if (feedback) {
+        const remaining = feedback.expiresAt - Date.now();
+        if (remaining > 0) {
+          toggle.disabled = true;
+          toggle.textContent = feedback.label;
+          toggle.classList.add("is-feedback");
+          setTimeout(() => {
+            assignmentFeedback.delete(item.dataset.transactionId);
+            renderBudgetUnintentional();
+          }, remaining);
+        } else {
+          assignmentFeedback.delete(item.dataset.transactionId);
+        }
+      }
       toggle.addEventListener("click", () => {
         item.classList.toggle("is-assigning");
         toggle.setAttribute(
@@ -3038,6 +3213,10 @@ const renderBudgetUnintentional = () => {
         }
         setTransactionAssignment(transaction, { type, targetId });
         transaction.reviewed = true;
+        assignmentFeedback.set(transaction.id, {
+          label: "Assigned ✓",
+          expiresAt: Date.now() + 700,
+        });
         saveBudgetState();
         renderBudget();
       });
