@@ -2330,7 +2330,7 @@ const renderBudgetSelector = () => {
     button.textContent = budget.name;
     button.addEventListener("click", () => {
       ensureBudgetState();
-      setActiveModule("budget");
+      navigateToPath("/budget");
       if (budgetModal) {
         closeModal(budgetModal);
       }
@@ -2373,6 +2373,35 @@ const setActiveModule = (moduleName) => {
     ensureBudgetState();
     renderBudget();
   }
+};
+
+const normalizePathname = (pathname) => {
+  if (!pathname || pathname === "/index.html") {
+    return "/";
+  }
+  if (pathname.length > 1 && pathname.endsWith("/")) {
+    return pathname.slice(0, -1);
+  }
+  return pathname;
+};
+
+const getModuleFromPath = (pathname) => {
+  const normalized = normalizePathname(pathname);
+  if (normalized === "/budget") {
+    return "budget";
+  }
+  if (normalized === "/class-builder") {
+    return "vefa";
+  }
+  return "menu";
+};
+
+const navigateToPath = (path) => {
+  const normalized = normalizePathname(path);
+  if (window.location.pathname !== normalized) {
+    window.history.pushState({}, "", normalized);
+  }
+  setActiveModule(getModuleFromPath(normalized));
 };
 
 const getBillActual = (bill) => {
@@ -2985,7 +3014,10 @@ if (themeToggleButtons.length) {
   });
 }
 
-setActiveModule("menu");
+setActiveModule(getModuleFromPath(window.location.pathname));
+window.addEventListener("popstate", () => {
+  setActiveModule(getModuleFromPath(window.location.pathname));
+});
 
 if (openBudgetButton) {
   openBudgetButton.addEventListener("click", () => openBudgetSelector());
@@ -2993,13 +3025,12 @@ if (openBudgetButton) {
 
 if (openClassBuilderButton) {
   openClassBuilderButton.addEventListener("click", () =>
-    setActiveModule("vefa")
+    navigateToPath("/class-builder")
   );
 }
 
 if (openBudgetBuilderButton) {
   openBudgetBuilderButton.addEventListener("click", () => {
-    setActiveModule("budget");
     openBudgetSelector();
   });
 }
@@ -3008,7 +3039,7 @@ if (budgetNewButton) {
   budgetNewButton.addEventListener("click", () => {
     budgetState = getBudgetDefaults();
     saveBudgetState();
-    setActiveModule("budget");
+    navigateToPath("/budget");
     if (budgetModal) {
       closeModal(budgetModal);
     }
