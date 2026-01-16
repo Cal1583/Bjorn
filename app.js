@@ -3311,10 +3311,17 @@ const renderBudgetTransactions = () => {
       : "";
     const feedback = assignmentFeedback.get(transaction.id);
     row.innerHTML = `
-      <div class="budget-transaction__meta">
-        <strong>${transaction.description}</strong>
-        <span>${transaction.date || "No date"}</span>
-        <span>${getTransactionTypeLabel(transaction)}</span>
+      <div class="budget-transaction__header">
+        <div class="budget-transaction__merchant">
+          <strong>${transaction.description}</strong>
+          <div class="budget-transaction__details">
+            <span>${transaction.date || "No date"}</span>
+            <span>${getTransactionTypeLabel(transaction)}</span>
+          </div>
+        </div>
+        <div class="budget-transaction__amount">
+          ${formatTransactionAmount(transaction)}
+        </div>
       </div>
       <div class="budget-transaction__assign">
         <label>
@@ -3344,22 +3351,22 @@ const renderBudgetTransactions = () => {
           <select data-role="assign-target"></select>
         </label>
         <button type="button" data-action="assign">Assign</button>
+      </div>
+      <div class="budget-transaction__footer">
         <span class="budget-transaction__status ${
           statusMessage ? "is-success" : ""
         }" data-role="assignment-status">${statusMessage}</span>
-      </div>
-      <div class="budget-transaction__amount">
-        ${formatTransactionAmount(transaction)}
-      </div>
-      <div class="budget-transaction__meta">
-        <span>Status</span>
-        <strong>${transaction.reviewed ? "Reviewed" : "Unreviewed"}</strong>
-      </div>
-      <div class="budget-transaction__actions">
-        <button type="button" data-action="review">
-          ${transaction.reviewed ? "Unreview" : "Reviewed"}
-        </button>
-        <button type="button" data-action="clear">Remove</button>
+        <span class="budget-transaction__status ${
+          transaction.reviewed ? "is-success" : "is-error"
+        }">
+          ${transaction.reviewed ? "Reviewed" : "Unreviewed"}
+        </span>
+        <div class="budget-transaction__actions">
+          <button type="button" data-action="review">
+            ${transaction.reviewed ? "Unreview" : "Reviewed"}
+          </button>
+          <button type="button" data-action="clear">Remove</button>
+        </div>
       </div>
     `;
     const assignTypeSelect = row.querySelector('[data-role="assign-type"]');
