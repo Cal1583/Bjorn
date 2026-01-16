@@ -63,7 +63,7 @@
           <div class="budget-sidebar-panels">
             <section class="budget-panel budget-panel--sidebar" id="budget-transactions-panel">
               <header class="budget-panel__header">
-                <h2>Transactions</h2>
+                <h2>Credits &amp; Transfers</h2>
               </header>
               <div class="budget-table" id="budget-transactions-summary"></div>
               <form
@@ -368,6 +368,14 @@
             <section class="budget-panel" id="budget-categories-panel">
               <header class="budget-panel__header">
                 <h2>Running Categories</h2>
+                <div class="budget-panel__actions">
+                  <button type="button" id="budget-collapse-categories">
+                    Collapse all
+                  </button>
+                  <button type="button" id="budget-expand-categories">
+                    Expand all
+                  </button>
+                </div>
               </header>
               <div class="budget-table" id="budget-categories-table"></div>
               <form class="budget-form" id="budget-add-category">
