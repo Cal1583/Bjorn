@@ -1610,19 +1610,43 @@ body[data-view="budget"] .mini-toolbar {
 }
 
 .budget-transaction {
-  display: grid;
-  grid-template-columns: 1.4fr 1.2fr 0.7fr 0.7fr 0.6fr;
-  gap: 0.6rem;
-  padding: 0.75rem 0.9rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+  padding: 1rem 1.1rem;
   border-radius: 12px;
   border: 1px solid #e1e6f6;
   background: #f8f9ff;
-  align-items: center;
 }
 
 .budget-transaction.is-reviewed {
   background: #e9f6ef;
   border-color: #bfe6cd;
+}
+
+.budget-transaction__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.budget-transaction__merchant {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.budget-transaction__merchant strong {
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+.budget-transaction__details {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  font-size: 0.8rem;
+  color: #667089;
 }
 
 .budget-transaction__meta {
@@ -1648,11 +1672,12 @@ body[data-view="budget"] .mini-toolbar {
 .budget-transaction__amount {
   font-weight: 700;
   text-align: right;
+  font-size: 1rem;
 }
 
 .budget-transaction__assign {
   display: grid;
-  gap: 0.4rem;
+  gap: 0.6rem;
 }
 
 .budget-transaction__assign label {
@@ -1717,6 +1742,17 @@ body[data-view="budget"] .mini-toolbar {
   display: flex;
   gap: 0.4rem;
   justify-content: flex-end;
+}
+
+.budget-transaction__footer {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.budget-transaction__footer .budget-transaction__actions {
+  margin-left: auto;
 }
 
 @media (max-width: 1100px) {
@@ -1985,7 +2021,8 @@ body[data-view="budget"] .mini-toolbar {
 :root[data-theme="dark"] .budget-subtitle,
 :root[data-theme="dark"] .budget-total-card span,
 :root[data-theme="dark"] .budget-row--header,
-:root[data-theme="dark"] .budget-transaction__meta span {
+:root[data-theme="dark"] .budget-transaction__meta span,
+:root[data-theme="dark"] .budget-transaction__details span {
   color: #b9c2dd;
 }
 
