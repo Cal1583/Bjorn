@@ -25,6 +25,8 @@
           <button type="button" id="budget-export-json">
             Export budget JSON
           </button>
+          <hr class="sidebar__divider sidebar__divider--budget" />
+          <div class="sidebar__budget-tools" id="budget-tools"></div>
         </div>
         <div class="sidebar__section sidebar__section--vefa">
           <button id="new-project">New project</button>
@@ -129,7 +131,10 @@
           </div>
         </section>
         <div class="mini-toolbar">
-          <div class="mini-toolbar__section mini-toolbar__section--primary">
+          <div
+            class="mini-toolbar__section mini-toolbar__section--primary"
+            id="primary-toolbar"
+          >
             <input
               id="search-input"
               type="search"
