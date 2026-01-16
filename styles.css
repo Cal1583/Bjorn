@@ -32,12 +32,16 @@ body {
 .main-menu {
   position: absolute;
   inset: 0;
-  display: flex;
+  display: none;
   align-items: center;
   justify-content: center;
   padding: 2rem;
   background: radial-gradient(circle at top, #f7f9ff 0%, #eef1f9 55%, #e2e6f3 100%);
   z-index: 2;
+}
+
+.main-menu[hidden] {
+  display: none !important;
 }
 
 .main-menu__panel {
