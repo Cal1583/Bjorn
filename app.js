@@ -3030,7 +3030,10 @@ if (openClassBuilderButton) {
 }
 
 if (openBudgetBuilderButton) {
-  openBudgetBuilderButton.addEventListener("click", () => openBudgetSelector());
+  openBudgetBuilderButton.addEventListener("click", () => {
+    setActiveModule("budget");
+    openBudgetSelector();
+  });
 }
 
 if (budgetNewButton) {
