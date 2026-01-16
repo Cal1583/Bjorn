@@ -72,6 +72,48 @@
       </aside>
 
       <main class="canvas" id="canvas">
+        <section class="main-menu" id="main-menu" hidden>
+          <div class="main-menu__panel">
+            <p class="main-menu__eyebrow">Main menu</p>
+            <h1>Choose your workspace</h1>
+            <p class="main-menu__subtitle">
+              Jump back into your class diagrams or start a new budget.
+            </p>
+            <div class="main-menu__actions">
+              <button
+                class="main-menu__button main-menu__button--primary"
+                id="open-class-builder"
+                type="button"
+              >
+                Class Builder
+              </button>
+              <button
+                class="main-menu__button main-menu__button--primary"
+                id="open-budget-builder"
+                type="button"
+              >
+                Budget
+              </button>
+            </div>
+            <div class="main-menu__options">
+              <h2>View options</h2>
+              <div class="main-menu__option-row">
+                <span>Dark mode</span>
+                <button
+                  type="button"
+                  data-theme-toggle
+                  aria-pressed="false"
+                >
+                  Dark mode
+                </button>
+              </div>
+              <div class="main-menu__option-row main-menu__option-row--placeholder">
+                <span>Color scheme</span>
+                <button type="button" disabled>Coming soon</button>
+              </div>
+            </div>
+          </div>
+        </section>
         <div class="mini-toolbar">
           <div class="mini-toolbar__section mini-toolbar__section--primary">
             <input
@@ -109,6 +151,7 @@
                 <button
                   id="theme-toggle"
                   type="button"
+                  data-theme-toggle
                   aria-pressed="false"
                 >
                   Dark mode
@@ -359,6 +402,29 @@
             <button type="button" id="class-cancel">Close</button>
           </div>
         </form>
+      </div>
+    </aside>
+
+    <aside class="modal modal--centered" id="budget-modal" hidden>
+      <div class="modal__header">
+        <h2 class="modal__title">Budget setup</h2>
+        <div class="modal__actions">
+          <button type="button" data-modal-action="close">Close</button>
+        </div>
+      </div>
+      <div class="modal__body">
+        <div class="budget-selector">
+          <button class="budget-selector__new" type="button" id="budget-new">
+            Start new budget
+          </button>
+          <div class="budget-selector__existing">
+            <p class="budget-selector__label">Existing budgets</p>
+            <div class="budget-selector__list" id="budget-selector-list"></div>
+            <p class="template-empty" id="budget-selector-empty">
+              No saved budgets yet.
+            </p>
+          </div>
+        </div>
       </div>
     </aside>
 

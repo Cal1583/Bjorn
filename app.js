@@ -41,11 +41,18 @@ const fitToScreenButton = document.getElementById("fit-to-screen");
 const gridToggleButton = document.getElementById("grid-toggle");
 const snapToggleButton = document.getElementById("snap-toggle");
 const viewDefinitionsButton = document.getElementById("view-definitions");
-const themeToggleButton = document.getElementById("theme-toggle");
+const themeToggleButtons = document.querySelectorAll("[data-theme-toggle]");
 const templateList = document.getElementById("template-list");
 const templateEmpty = document.getElementById("template-empty");
 const openBudgetButton = document.getElementById("open-budget");
 const budgetView = document.getElementById("budget-view");
+const mainMenu = document.getElementById("main-menu");
+const openClassBuilderButton = document.getElementById("open-class-builder");
+const openBudgetBuilderButton = document.getElementById("open-budget-builder");
+const budgetModal = document.getElementById("budget-modal");
+const budgetNewButton = document.getElementById("budget-new");
+const budgetSelectorList = document.getElementById("budget-selector-list");
+const budgetSelectorEmpty = document.getElementById("budget-selector-empty");
 const budgetTotals = document.getElementById("budget-totals");
 const budgetBillsTable = document.getElementById("budget-bills-table");
 const budgetCategoriesTable = document.getElementById("budget-categories-table");
@@ -730,9 +737,11 @@ const setThemeMode = (darkMode) => {
   } else {
     delete document.documentElement.dataset.theme;
   }
-  if (themeToggleButton) {
-    themeToggleButton.setAttribute("aria-pressed", String(isDarkMode));
-    themeToggleButton.textContent = isDarkMode ? "Light mode" : "Dark mode";
+  if (themeToggleButtons.length) {
+    themeToggleButtons.forEach((button) => {
+      button.setAttribute("aria-pressed", String(isDarkMode));
+      button.textContent = isDarkMode ? "Light mode" : "Dark mode";
+    });
   }
 };
 
@@ -2154,7 +2163,7 @@ const initialize = () => {
   addClass({ x: 120, y: 140 }, { name: "Category", attributes: ["name"] });
   addClass({ x: 420, y: 260 }, { name: "ItemType", attributes: ["label"] });
   createRelationship("class-1", "class-2", "one-to-many");
-  [modelModal, legendModal, colorsModal].forEach((modal) => {
+  [modelModal, legendModal, colorsModal, budgetModal].forEach((modal) => {
     if (modal) {
       initializeModal(modal);
     }
@@ -2293,9 +2302,58 @@ const ensureBudgetState = () => {
   }
 };
 
+const getExistingBudgets = () => {
+  if (!window.localStorage) {
+    return [];
+  }
+  const stored = localStorage.getItem(budgetStorageKey);
+  if (!stored) {
+    return [];
+  }
+  return [{ id: "saved-budget", name: "Saved budget" }];
+};
+
+const renderBudgetSelector = () => {
+  if (!budgetSelectorList || !budgetSelectorEmpty) {
+    return;
+  }
+  budgetSelectorList.innerHTML = "";
+  const budgets = getExistingBudgets();
+  if (!budgets.length) {
+    budgetSelectorEmpty.hidden = false;
+    return;
+  }
+  budgetSelectorEmpty.hidden = true;
+  budgets.forEach((budget) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = budget.name;
+    button.addEventListener("click", () => {
+      ensureBudgetState();
+      setActiveModule("budget");
+      if (budgetModal) {
+        closeModal(budgetModal);
+      }
+    });
+    budgetSelectorList.appendChild(button);
+  });
+};
+
+const openBudgetSelector = () => {
+  if (!budgetModal) {
+    return;
+  }
+  renderBudgetSelector();
+  openModal(budgetModal);
+};
+
 const setActiveModule = (moduleName) => {
   activeModule = moduleName;
-  document.body.dataset.view = moduleName === "budget" ? "budget" : "vefa";
+  document.body.dataset.view =
+    moduleName === "budget" ? "budget" : moduleName === "menu" ? "menu" : "vefa";
+  if (mainMenu) {
+    mainMenu.hidden = moduleName !== "menu";
+  }
   if (openBudgetButton) {
     openBudgetButton.setAttribute(
       "aria-pressed",
@@ -2312,6 +2370,7 @@ const setActiveModule = (moduleName) => {
       moduleName === "budget" ? budgetSearchQuery : searchQuery;
   }
   if (moduleName === "budget") {
+    ensureBudgetState();
     renderBudget();
   }
 };
@@ -2952,19 +3011,36 @@ if (viewDefinitionsButton) {
   );
 }
 
-if (themeToggleButton) {
-  themeToggleButton.addEventListener("click", () =>
-    setThemeMode(!isDarkMode)
+if (themeToggleButtons.length) {
+  themeToggleButtons.forEach((button) => {
+    button.addEventListener("click", () => setThemeMode(!isDarkMode));
+  });
+}
+
+setActiveModule("menu");
+
+if (openBudgetButton) {
+  openBudgetButton.addEventListener("click", () => openBudgetSelector());
+}
+
+if (openClassBuilderButton) {
+  openClassBuilderButton.addEventListener("click", () =>
+    setActiveModule("vefa")
   );
 }
 
-ensureBudgetState();
-setActiveModule("vefa");
+if (openBudgetBuilderButton) {
+  openBudgetBuilderButton.addEventListener("click", () => openBudgetSelector());
+}
 
-if (openBudgetButton) {
-  openBudgetButton.addEventListener("click", () => {
-    ensureBudgetState();
-    setActiveModule(activeModule === "budget" ? "vefa" : "budget");
+if (budgetNewButton) {
+  budgetNewButton.addEventListener("click", () => {
+    budgetState = getBudgetDefaults();
+    saveBudgetState();
+    setActiveModule("budget");
+    if (budgetModal) {
+      closeModal(budgetModal);
+    }
   });
 }
 
