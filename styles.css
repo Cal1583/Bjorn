@@ -175,6 +175,10 @@ body {
   gap: 0.6rem;
 }
 
+.sidebar__section--budget {
+  display: none;
+}
+
 .sidebar button {
   padding: 0.55rem 0.75rem;
   border-radius: 8px;
@@ -199,6 +203,16 @@ body {
 .sidebar__status {
   font-size: 0.9rem;
   color: #5b6482;
+}
+
+body[data-view="budget"] .sidebar__section--vefa,
+body[data-view="budget"] .sidebar__divider--vefa,
+body[data-view="budget"] .sidebar__status {
+  display: none;
+}
+
+body[data-view="budget"] .sidebar__section--budget {
+  display: flex;
 }
 
 .template-list {
