@@ -349,12 +349,36 @@
               </section>
               <section
                 class="budget-panel budget-panel--wide"
-                id="budget-unintentional-panel"
+                id="budget-transactions-panel"
               >
                 <header class="budget-panel__header">
-                  <h2>Unintentional Spending</h2>
+                  <h2>Credits &amp; Transfers</h2>
                 </header>
-                <div class="budget-unintentional" id="budget-unintentional"></div>
+                <div class="budget-table" id="budget-transactions-summary"></div>
+                <form
+                  class="budget-form budget-form--inline"
+                  id="budget-add-transaction"
+                >
+                  <input
+                    type="text"
+                    name="transactionPayee"
+                    placeholder="Payee"
+                    required
+                  />
+                  <input
+                    type="number"
+                    name="transactionAmount"
+                    step="0.01"
+                    placeholder="Amount"
+                    required
+                  />
+                  <select name="transactionType" required>
+                    <option value="Credit">Credit</option>
+                    <option value="Transfer">Transfer</option>
+                  </select>
+                  <input type="date" name="transactionDate" />
+                  <button type="submit">Add transfer/credit</button>
+                </form>
               </section>
             </div>
             <aside class="budget-transactions-sidebar" id="budget-transactions-sidebar">
@@ -366,39 +390,12 @@
                   <div class="budget-sidebar-panels">
                     <section
                       class="budget-panel budget-panel--sidebar"
-                      id="budget-transactions-panel"
+                      id="budget-unintentional-panel"
                     >
                       <header class="budget-panel__header">
-                        <h2>Credits &amp; Transfers</h2>
+                        <h2>Unintentional Spending</h2>
                       </header>
-                      <div
-                        class="budget-table"
-                        id="budget-transactions-summary"
-                      ></div>
-                      <form
-                        class="budget-form budget-form--inline"
-                        id="budget-add-transaction"
-                      >
-                        <input
-                          type="text"
-                          name="transactionPayee"
-                          placeholder="Payee"
-                          required
-                        />
-                        <input
-                          type="number"
-                          name="transactionAmount"
-                          step="0.01"
-                          placeholder="Amount"
-                          required
-                        />
-                        <select name="transactionType" required>
-                          <option value="Credit">Credit</option>
-                          <option value="Transfer">Transfer</option>
-                        </select>
-                        <input type="date" name="transactionDate" />
-                        <button type="submit">Add transfer/credit</button>
-                      </form>
+                      <div class="budget-unintentional" id="budget-unintentional"></div>
                     </section>
                     <section
                       class="budget-panel budget-panel--sidebar"
