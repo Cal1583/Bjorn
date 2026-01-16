@@ -171,6 +171,8 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
+  font-size: 1.6rem;
+  letter-spacing: 0.03em;
 }
 
 .sidebar__section {
@@ -199,6 +201,27 @@ body {
 
 .sidebar button:hover {
   border-color: #7f93d9;
+}
+
+body[data-tooltips="true"] [data-tooltip] {
+  position: relative;
+}
+
+body[data-tooltips="true"] [data-tooltip]:hover::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  left: calc(100% + 12px);
+  top: 50%;
+  transform: translateY(-50%);
+  background: rgba(31, 36, 48, 0.96);
+  color: #f8f9ff;
+  padding: 0.45rem 0.6rem;
+  border-radius: 8px;
+  font-size: 0.75rem;
+  white-space: nowrap;
+  z-index: 5;
+  pointer-events: none;
+  box-shadow: 0 8px 18px rgba(31, 36, 48, 0.25);
 }
 
 .sidebar__label {
@@ -1188,6 +1211,26 @@ body[data-view="budget"] .mini-toolbar {
   color: #57607a;
 }
 
+.budget-net-balance {
+  display: grid;
+  gap: 0.35rem;
+  align-items: flex-end;
+  justify-items: end;
+  text-align: right;
+}
+
+.budget-net-balance span {
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.7rem;
+  color: #6b738c;
+}
+
+.budget-net-balance strong {
+  font-size: 2.2rem;
+  color: #1f2430;
+}
+
 .budget-actions {
   display: flex;
   flex-wrap: wrap;
@@ -1267,6 +1310,27 @@ body[data-view="budget"] .mini-toolbar {
   gap: 0.6rem;
 }
 
+.budget-category-group {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.budget-category-transactions {
+  display: grid;
+  gap: 0.35rem;
+  margin-left: 0.8rem;
+  padding-left: 0.8rem;
+  border-left: 2px dashed #d4daee;
+}
+
+.budget-row--category-transaction {
+  grid-template-columns: 1.6fr 0.9fr 0.8fr 0.5fr;
+  background: #f5f7ff;
+  border-radius: 10px;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid #e1e6f6;
+}
+
 .budget-row {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -1279,7 +1343,7 @@ body[data-view="budget"] .mini-toolbar {
 }
 
 .budget-row--categories {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: 1.5fr 0.9fr 0.9fr 0.5fr;
 }
 
 .budget-row--header {
@@ -1729,6 +1793,10 @@ body[data-view="budget"] .mini-toolbar {
   color: #b9c2dd;
 }
 
+:root[data-theme="dark"] .budget-net-balance strong {
+  color: #f8f9ff;
+}
+
 :root[data-theme="dark"] .budget-actions button,
 :root[data-theme="dark"] .budget-row input[type="text"],
 :root[data-theme="dark"] .budget-row input[type="number"],
@@ -1778,6 +1846,15 @@ body[data-view="budget"] .mini-toolbar {
   background: #34262a;
   border-color: #5a3a42;
   color: #e9c7c7;
+}
+
+:root[data-theme="dark"] .budget-category-transactions {
+  border-left-color: #2d3454;
+}
+
+:root[data-theme="dark"] .budget-row--category-transaction {
+  background: #1c2236;
+  border-color: #2d3454;
 }
 
 :root[data-theme="dark"] .budget-transaction {

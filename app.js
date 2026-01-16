@@ -71,6 +71,8 @@ const budgetCsvInput = document.getElementById("budget-csv-input");
 const budgetJsonInput = document.getElementById("budget-json-input");
 const budgetAddBillForm = document.getElementById("budget-add-bill");
 const budgetAddCategoryForm = document.getElementById("budget-add-category");
+const toggleTooltipsButton = document.getElementById("toggle-tooltips");
+const budgetNetBalance = document.getElementById("budget-net-balance");
 
 let modelState = {
   classes: [],
@@ -105,6 +107,7 @@ let activeModule = "vefa";
 let budgetState = null;
 let budgetFilterMode = "all";
 let budgetSearchQuery = "";
+let tooltipsEnabled = true;
 
 const zoomSettings = {
   min: 0.1,
@@ -747,6 +750,23 @@ const setThemeMode = (darkMode) => {
       button.setAttribute("aria-pressed", String(isDarkMode));
       button.textContent = isDarkMode ? "Light mode" : "Dark mode";
     });
+  }
+};
+
+const setTooltipsEnabled = (enabled) => {
+  tooltipsEnabled = enabled;
+  document.body.dataset.tooltips = tooltipsEnabled ? "true" : "false";
+  if (toggleTooltipsButton) {
+    toggleTooltipsButton.textContent = tooltipsEnabled
+      ? "Hide Tool Tips"
+      : "Show Tool Tips";
+    toggleTooltipsButton.setAttribute(
+      "aria-pressed",
+      String(tooltipsEnabled)
+    );
+  }
+  if (window.localStorage) {
+    localStorage.setItem(tooltipsStorageKey, String(tooltipsEnabled));
   }
 };
 
@@ -2179,6 +2199,10 @@ const initialize = () => {
   setSnapEnabled(false);
   setViewOptionsOpen(false);
   setThemeMode(false);
+  const storedTooltips = window.localStorage
+    ? localStorage.getItem(tooltipsStorageKey)
+    : null;
+  setTooltipsEnabled(storedTooltips === "true");
   resetHistory();
 };
 
@@ -2244,6 +2268,7 @@ if (createHalfCoreButton) {
 }
 
 const budgetStorageKey = "vefa-budget-data-v1";
+const tooltipsStorageKey = "vefa-tooltips-enabled";
 
 const createBudgetId = (prefix) =>
   `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
@@ -2263,6 +2288,15 @@ const parseNumber = (value) => {
   }
   const normalized = parseFloat(String(value).replace(/[^0-9.-]/g, ""));
   return Number.isNaN(normalized) ? null : normalized;
+};
+
+const getTransactionTypeLabel = (transaction) => {
+  const label = transaction?.transactionType?.trim();
+  if (label) {
+    return label;
+  }
+  const amount = transaction?.amount ?? 0;
+  return amount >= 0 ? "Credit" : "Payment";
 };
 
 const getBudgetDefaults = () => ({
@@ -2520,6 +2554,7 @@ const renderBudgetTotals = () => {
     0
   );
   const remainingBalance = totalBudget - totalSpent;
+  const netBalance = remainingBalance;
   const totalOverBudget = budgetState.bills.reduce((sum, bill) => {
     const actual = getBillActual(bill);
     const budget = bill.budget || 0;
@@ -2528,26 +2563,41 @@ const renderBudgetTotals = () => {
     }
     return actual > budget ? sum + (actual - budget) : sum;
   }, 0);
+  if (budgetNetBalance) {
+    const netValue = budgetNetBalance.querySelector("strong");
+    if (netValue) {
+      netValue.textContent = formatCurrency(netBalance);
+    }
+  }
   budgetTotals.innerHTML = [
+    {
+      label: "Net Balance",
+      value: formatCurrency(netBalance),
+      tooltip: "Budgeted total minus transaction spending.",
+    },
     {
       label: "Loaded Transactions",
       value: totalTransactions.toString(),
+      tooltip: "Number of transactions currently loaded.",
     },
     {
       label: "Bills Remaining",
       value: billsRemaining.toString(),
+      tooltip: "Bills still marked as unpaid.",
     },
     {
       label: "Over Budget Bills",
       value: formatCurrency(totalOverBudget),
+      tooltip: "How far bills are over their budgeted amounts.",
     },
     {
       label: "Remaining Balance",
       value: formatCurrency(remainingBalance),
+      tooltip: "Budgeted totals minus all transaction activity.",
     },
   ]
     .map(
-      (item) => `<div class="budget-total-card">
+      (item) => `<div class="budget-total-card" data-tooltip="${item.tooltip}">
         <span>${item.label}</span>
         <strong>${item.value}</strong>
       </div>`
@@ -2664,9 +2714,12 @@ const renderBudgetCategories = () => {
     <div>Category</div>
     <div>Cap</div>
     <div>Spent</div>
+    <div>Remove</div>
   `;
   budgetCategoriesTable.appendChild(headerRow);
   budgetState.categories.forEach((category) => {
+    const group = document.createElement("div");
+    group.className = "budget-category-group";
     const row = document.createElement("div");
     row.className = "budget-row budget-row--categories";
     const spent = getCategorySpent(category);
@@ -2676,8 +2729,10 @@ const renderBudgetCategories = () => {
         category.cap ?? ""
       }" />
       <div>${formatCurrency(spent)}</div>
+      <button type="button" data-action="delete">Remove</button>
     `;
     const [nameInput, capInput] = row.querySelectorAll("input");
+    const deleteButton = row.querySelector('[data-action="delete"]');
     nameInput.addEventListener("input", (event) => {
       category.name = event.target.value;
       saveBudgetState();
@@ -2694,7 +2749,66 @@ const renderBudgetCategories = () => {
       saveBudgetState();
       renderBudgetTotals();
     });
-    budgetCategoriesTable.appendChild(row);
+    if (deleteButton) {
+      deleteButton.addEventListener("click", () => {
+        budgetState.categories = budgetState.categories.filter(
+          (entry) => entry.id !== category.id
+        );
+        budgetState.transactions.forEach((transaction) => {
+          if (
+            transaction.tag?.type === "category" &&
+            transaction.tag?.targetId === category.id
+          ) {
+            transaction.tag = { type: "unintentional" };
+            transaction.reviewed = false;
+          }
+        });
+        saveBudgetState();
+        renderBudget();
+      });
+    }
+    group.appendChild(row);
+    const categoryTransactions = budgetState.transactions.filter(
+      (transaction) =>
+        transaction.tag?.type === "category" &&
+        transaction.tag?.targetId === category.id
+    );
+    if (categoryTransactions.length) {
+      const transactionList = document.createElement("div");
+      transactionList.className = "budget-category-transactions";
+      categoryTransactions.forEach((transaction) => {
+        const transactionRow = document.createElement("div");
+        transactionRow.className =
+          "budget-row budget-row--category-transaction";
+        const typeLabel = getTransactionTypeLabel(transaction);
+        transactionRow.innerHTML = `
+          <div>
+            <strong>${transaction.description}</strong>
+            <div class="budget-transaction__meta">
+              <span>${transaction.date || "No date"}</span>
+              <span>${typeLabel}</span>
+            </div>
+          </div>
+          <div>${formatCurrency(transaction.amount || 0)}</div>
+          <div>${transaction.reviewed ? "Reviewed" : "Unreviewed"}</div>
+          <button type="button" data-action="clear">Remove</button>
+        `;
+        const clearButton = transactionRow.querySelector(
+          '[data-action="clear"]'
+        );
+        if (clearButton) {
+          clearButton.addEventListener("click", () => {
+            transaction.tag = { type: "unintentional" };
+            transaction.reviewed = false;
+            saveBudgetState();
+            renderBudget();
+          });
+        }
+        transactionList.appendChild(transactionRow);
+      });
+      group.appendChild(transactionList);
+    }
+    budgetCategoriesTable.appendChild(group);
   });
 };
 
@@ -2845,6 +2959,7 @@ const renderBudgetTransactions = () => {
       <div class="budget-transaction__meta">
         <strong>${transaction.description}</strong>
         <span>${transaction.date || "No date"}</span>
+        <span>${getTransactionTypeLabel(transaction)}</span>
       </div>
       <div class="budget-transaction__assign">
         <label>
@@ -2878,6 +2993,7 @@ const renderBudgetTransactions = () => {
         <button type="button" data-action="review">
           ${transaction.reviewed ? "Unreview" : "Reviewed"}
         </button>
+        <button type="button" data-action="clear">Remove</button>
       </div>
     `;
     const assignTypeSelect = row.querySelector('[data-role="assign-type"]');
@@ -2919,6 +3035,12 @@ const renderBudgetTransactions = () => {
       saveBudgetState();
       renderBudgetTransactions();
       renderBudgetTotals();
+    });
+    row.querySelector('[data-action="clear"]').addEventListener("click", () => {
+      transaction.tag = { type: "unintentional" };
+      transaction.reviewed = false;
+      saveBudgetState();
+      renderBudget();
     });
     budgetTransactions.appendChild(row);
   });
@@ -3019,6 +3141,7 @@ const importTransactionsFromCsv = (file) => {
     const amountIndex = getIndex(["amount"]);
     const debitIndex = getIndex(["debit", "withdrawal"]);
     const creditIndex = getIndex(["credit", "deposit"]);
+    const typeIndex = getIndex(["transaction type", "type", "tran type", "txn type"]);
     const existingKeys = new Set(
       budgetState.transactions.map(
         (transaction) =>
@@ -3029,6 +3152,8 @@ const importTransactionsFromCsv = (file) => {
       const description = row[descriptionIndex] || "Transaction";
       const date = row[dateIndex] || "";
       let amount = parseNumber(row[amountIndex]);
+      const rawType = row[typeIndex] || "";
+      const transactionType = rawType.trim();
       if (amount === null) {
         const debit = parseNumber(row[debitIndex]) || 0;
         const credit = parseNumber(row[creditIndex]) || 0;
@@ -3047,6 +3172,7 @@ const importTransactionsFromCsv = (file) => {
         date,
         description,
         amount,
+        transactionType: transactionType || null,
         reviewed: autoTag.type !== "unintentional",
         tag: autoTag,
       };
@@ -3197,6 +3323,12 @@ if (themeToggleButtons.length) {
   themeToggleButtons.forEach((button) => {
     button.addEventListener("click", () => setThemeMode(!isDarkMode));
   });
+}
+
+if (toggleTooltipsButton) {
+  toggleTooltipsButton.addEventListener("click", () =>
+    setTooltipsEnabled(!tooltipsEnabled)
+  );
 }
 
 const syncModuleWithLocation = () => {
