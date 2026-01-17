@@ -1467,7 +1467,20 @@ body[data-view="budget"] .mini-toolbar {
   gap: 0.35rem;
 }
 
+.budget-bill-group {
+  display: grid;
+  gap: 0.35rem;
+}
+
 .budget-category-transactions {
+  display: grid;
+  gap: 0.35rem;
+  margin-left: 0.8rem;
+  padding-left: 0.8rem;
+  border-left: 2px dashed #d4daee;
+}
+
+.budget-bill-transactions {
   display: grid;
   gap: 0.35rem;
   margin-left: 0.8rem;
@@ -1479,7 +1492,19 @@ body[data-view="budget"] .mini-toolbar {
   display: none;
 }
 
+.budget-bill-group.is-collapsed .budget-bill-transactions {
+  display: none;
+}
+
 .budget-row--category-transaction {
+  grid-template-columns: 1.6fr 0.9fr 0.8fr 0.5fr;
+  background: #f5f7ff;
+  border-radius: 10px;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid #e1e6f6;
+}
+
+.budget-row--bill-transaction {
   grid-template-columns: 1.6fr 0.9fr 0.8fr 0.5fr;
   background: #f5f7ff;
   border-radius: 10px;
@@ -1503,7 +1528,7 @@ body[data-view="budget"] .mini-toolbar {
 }
 
 .budget-row--summary {
-  grid-template-columns: 1.4fr 0.9fr 0.8fr 0.9fr 0.5fr;
+  grid-template-columns: 1.4fr 0.9fr 0.8fr 0.9fr 1.2fr 0.5fr;
 }
 
 #budget-transactions-panel .budget-table,
@@ -1560,6 +1585,12 @@ body[data-view="budget"] .mini-toolbar {
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
+}
+
+.budget-summary__assign {
+  display: inline-flex;
+  gap: 0.4rem;
+  align-items: center;
 }
 
 .budget-form {
