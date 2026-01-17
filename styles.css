@@ -1636,11 +1636,27 @@ body[data-view="budget"] .mini-toolbar {
   color: #5a6278;
 }
 
+.budget-unintentional__controls {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
 .budget-unintentional__assign-toggle {
   padding: 0.35rem 0.6rem;
   border-radius: 8px;
   border: 1px solid #c8d1e3;
   background: #f8f9ff;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.budget-unintentional__exclude {
+  padding: 0.3rem 0.6rem;
+  border-radius: 8px;
+  border: 1px solid #f1c1b8;
+  background: #fff1ec;
+  color: #a33a2e;
   font-weight: 600;
   cursor: pointer;
 }
@@ -1712,6 +1728,17 @@ body[data-view="budget"] .mini-toolbar {
   gap: 0.6rem;
   font-size: 0.8rem;
   color: #667089;
+}
+
+.budget-excluded-label {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+  background: #f5e3df;
+  color: #a33a2e;
+  font-size: 0.7rem;
+  font-weight: 600;
 }
 
 .budget-transaction__meta {
@@ -2091,6 +2118,11 @@ body[data-view="budget"] .mini-toolbar {
   color: #b9c2dd;
 }
 
+:root[data-theme="dark"] .budget-excluded-label {
+  background: #3a2528;
+  color: #f4b7ac;
+}
+
 :root[data-theme="dark"] .budget-net-balance strong {
   color: #f8f9ff;
 }
@@ -2163,6 +2195,12 @@ body[data-view="budget"] .mini-toolbar {
   background: #34262a;
   border-color: #5a3a42;
   color: #e9c7c7;
+}
+
+:root[data-theme="dark"] .budget-unintentional__exclude {
+  background: #2a1b1f;
+  border-color: #5a3a42;
+  color: #f3b5a9;
 }
 
 :root[data-theme="dark"] .budget-category-transactions {
