@@ -2371,6 +2371,9 @@ const isCreditOrTransferTransaction = (transaction) =>
 const isSpendTransaction = (transaction) =>
   getTransactionKind(transaction) === "payment";
 
+const isExcludedFromBudget = (transaction) =>
+  Boolean(transaction?.excludedFromBudget);
+
 const getNormalizedTransactionAmount = (transaction) =>
   Math.abs(transaction?.amount || 0);
 
@@ -2564,13 +2567,39 @@ const normalizeBudgetTransactions = (state) => {
       transaction.id = createBudgetId("txn");
     }
     if (!transaction.tag) {
-      transaction.tag = { type: "unintentional" };
+      if (
+        transaction.assignedType === "bill" ||
+        transaction.assignedType === "category"
+      ) {
+        transaction.tag = {
+          type: transaction.assignedType,
+          targetId: transaction.assignedId || null,
+        };
+      } else {
+        transaction.tag = { type: "unintentional" };
+      }
+    } else if (!transaction.tag.type) {
+      transaction.tag.type = "unintentional";
+    }
+    if (
+      (transaction.tag.type === "bill" ||
+        transaction.tag.type === "category") &&
+      !transaction.tag.targetId &&
+      transaction.assignedId
+    ) {
+      transaction.tag.targetId = transaction.assignedId;
     }
     if (typeof transaction.reviewed !== "boolean") {
       transaction.reviewed = false;
     }
     if (typeof transaction.autoAssigned !== "boolean") {
       transaction.autoAssigned = false;
+    }
+    if (typeof transaction.excludedFromBudget !== "boolean") {
+      transaction.excludedFromBudget = false;
+    }
+    if (transaction.excludedFromBudget && !transaction.reviewed) {
+      transaction.reviewed = true;
     }
     syncTransactionAssignmentFields(transaction);
   });
@@ -3069,9 +3098,9 @@ const getTagLabel = (tag) => {
 const syncTransactionAssignmentFields = (transaction) => {
   const tag = transaction.tag || { type: "unintentional" };
   const type = tag.type || "unintentional";
-  transaction.assignedTargetType = type;
-  transaction.assignedTargetId =
-    type === "unintentional" ? null : tag.targetId || null;
+  const normalizedType = type === "bill" || type === "category" ? type : null;
+  transaction.assignedType = normalizedType;
+  transaction.assignedId = normalizedType ? tag.targetId || null : null;
   transaction.assignedTargetName = getTagLabel(tag);
 };
 
@@ -3149,31 +3178,32 @@ const recomputeBudgetDerivedState = () => {
 
   budgetState.transactions.forEach((transaction) => {
     const kind = getTransactionKind(transaction);
-    totalSpent += getSpendAmount(transaction);
     netBalance += getNetBalanceImpact(transaction);
+    if (isExcludedFromBudget(transaction)) {
+      return;
+    }
+    totalSpent += getSpendAmount(transaction);
     if (
       transaction.tag?.type === "bill" &&
-      transaction.tag?.targetId &&
-      kind === "payment"
+      transaction.tag?.targetId
     ) {
       const current = billTransactionTotals.get(transaction.tag.targetId) || 0;
       billTransactionTotals.set(
         transaction.tag.targetId,
-        current + getSpendAmount(transaction)
+        current + getNormalizedTransactionAmount(transaction)
       );
       const count = billTransactionCounts.get(transaction.tag.targetId) || 0;
       billTransactionCounts.set(transaction.tag.targetId, count + 1);
     }
     if (
       transaction.tag?.type === "category" &&
-      transaction.tag?.targetId &&
-      kind === "payment"
+      transaction.tag?.targetId
     ) {
       const current =
         categorySpentTotals.get(transaction.tag.targetId) || 0;
       categorySpentTotals.set(
         transaction.tag.targetId,
-        current + getSpendAmount(transaction)
+        current + getNormalizedTransactionAmount(transaction)
       );
     }
     if (
@@ -3568,9 +3598,13 @@ const renderBudgetCategories = () => {
         transactionRow.className =
           "budget-row budget-row--category-transaction";
         const typeLabel = getTransactionTypeLabel(transaction);
+        const excludedLabel = transaction.excludedFromBudget
+          ? '<span class="budget-excluded-label">Excluded</span>'
+          : "";
         transactionRow.innerHTML = `
           <div>
             <strong>${transaction.description}</strong>
+            ${excludedLabel}
             <div class="budget-transaction__meta">
               <span>${transaction.date || "No date"}</span>
               <span>${typeLabel}</span>
@@ -3657,13 +3691,22 @@ const renderBudgetUnintentional = () => {
             <div class="budget-unintentional__item" data-transaction-id="${
               transaction.id
             }">
-              <button
-                type="button"
-                class="budget-unintentional__assign-toggle"
-                aria-expanded="false"
-              >
-                Assign
-              </button>
+              <div class="budget-unintentional__controls">
+                <button
+                  type="button"
+                  class="budget-unintentional__assign-toggle"
+                  aria-expanded="false"
+                >
+                  Assign
+                </button>
+                <button
+                  type="button"
+                  class="budget-unintentional__exclude"
+                  data-action="exclude"
+                >
+                  Exclude
+                </button>
+              </div>
               <div class="budget-unintentional__details">
                 <span class="budget-unintentional__title">${
                   transaction.description
@@ -3689,6 +3732,7 @@ const renderBudgetUnintentional = () => {
     .forEach((item) => {
       const toggle = item.querySelector(".budget-unintentional__assign-toggle");
       const select = item.querySelector('[data-role="unintentional-assign"]');
+      const excludeButton = item.querySelector('[data-action="exclude"]');
       if (!toggle || !select) {
         return;
       }
@@ -3717,6 +3761,21 @@ const renderBudgetUnintentional = () => {
           select.focus();
         }
       });
+      if (excludeButton) {
+        excludeButton.addEventListener("click", () => {
+          const transactionId = item.dataset.transactionId;
+          const transaction = budgetState.transactions.find(
+            (entry) => entry.id === transactionId
+          );
+          if (!transaction) {
+            return;
+          }
+          transaction.excludedFromBudget = true;
+          transaction.reviewed = true;
+          saveBudgetState();
+          renderBudget();
+        });
+      }
       select.addEventListener("change", (event) => {
         const selection = event.target.value;
         if (!selection) {
@@ -3770,8 +3829,11 @@ const renderBudgetTransactionsSummary = () => {
   filteredTransactions.forEach((transaction) => {
     const row = document.createElement("div");
     row.className = "budget-row budget-row--summary";
+    const excludedLabel = transaction.excludedFromBudget
+      ? '<span class="budget-excluded-label">Excluded</span>'
+      : "";
     row.innerHTML = `
-      <div>${transaction.description}</div>
+      <div>${transaction.description} ${excludedLabel}</div>
       <div>${getTransactionTypeLabel(transaction)}</div>
       <div>${formatTransactionAmount(transaction)}</div>
       <div>${transaction.date || "No date"}</div>
@@ -3796,9 +3858,6 @@ const renderBudgetTransactions = () => {
     return;
   }
   const filteredTransactions = budgetState.transactions.filter((transaction) => {
-    if (!isSpendTransaction(transaction)) {
-      return false;
-    }
     if (budgetFilterMode === "reviewed" && !transaction.reviewed) {
       return false;
     }
@@ -3813,7 +3872,7 @@ const renderBudgetTransactions = () => {
     return true;
   });
   if (filteredTransactions.length === 0) {
-    budgetTransactions.innerHTML = `<p class="template-empty">No spend transactions loaded.</p>`;
+    budgetTransactions.innerHTML = `<p class="template-empty">No transactions loaded.</p>`;
     return;
   }
   budgetTransactions.innerHTML = "";
@@ -3831,6 +3890,9 @@ const renderBudgetTransactions = () => {
       ? `Assigned to: ${assignmentLabel}`
       : "";
     const feedback = assignmentFeedback.get(transaction.id);
+    const excludedLabel = transaction.excludedFromBudget
+      ? `<span class="budget-transaction__status">Excluded</span>`
+      : "";
     row.innerHTML = `
       <div class="budget-transaction__header">
         <div class="budget-transaction__merchant">
@@ -3877,6 +3939,7 @@ const renderBudgetTransactions = () => {
         <span class="budget-transaction__status ${
           statusMessage ? "is-success" : ""
         }" data-role="assignment-status">${statusMessage}</span>
+        ${excludedLabel}
         <span class="budget-transaction__status ${
           transaction.reviewed ? "is-success" : "is-error"
         }">
@@ -3961,9 +4024,9 @@ const renderBudgetTransactions = () => {
         return;
       }
       setTransactionAssignment(transaction, { type, targetId });
+      transaction.reviewed = true;
+      transaction.autoAssigned = false;
       if (type !== "unintentional") {
-        transaction.reviewed = true;
-        transaction.autoAssigned = false;
         upsertMatchRule(transaction.description, { type, targetId });
       }
       saveBudgetState();
@@ -4137,6 +4200,7 @@ const importTransactionsFromCsv = (file) => {
         reviewed: autoTag.type !== "unintentional",
         autoAssigned: autoTag.type !== "unintentional",
         tag: autoTag,
+        excludedFromBudget: false,
       };
       syncTransactionAssignmentFields(transaction);
       acc.push(transaction);
@@ -4507,6 +4571,7 @@ if (budgetAddTransactionForm) {
       reviewed: false,
       autoAssigned: false,
       tag: { type: "unintentional" },
+      excludedFromBudget: false,
     });
     syncTransactionAssignmentFields(budgetState.transactions[0]);
     applyAutoTagsToTransactions({ onlyUnintentional: true });
