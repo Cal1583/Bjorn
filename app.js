@@ -3218,6 +3218,8 @@ const recomputeBudgetDerivedState = () => {
   });
 
   const totalBudget = billBudgetsTotal + categoryCapsTotal;
+  const budgetRemaining =
+    totalBudget - (billActualsTotal + categorySpentTotal);
   const remainingBalance = totalBudget - totalSpent;
 
   budgetDerivedState = {
@@ -3226,6 +3228,7 @@ const recomputeBudgetDerivedState = () => {
     totalTransactions,
     billsRemaining,
     totalBudget,
+    budgetRemaining,
     totalSpent,
     remainingBalance,
     netBalance,
@@ -3308,6 +3311,12 @@ const renderBudgetTotals = () => {
       label: "Net Balance",
       value: formatCurrency(derived.netBalance),
       tooltip: "Net impact of actual credits and debits.",
+    },
+    {
+      label: "Budget Remaining",
+      value: formatCurrency(derived.budgetRemaining),
+      tooltip:
+        "Budget variance based on bill actuals and category spend.",
     },
     {
       label: "Budgeted Total",
