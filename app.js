@@ -87,6 +87,10 @@ const budgetAddCategoryForm = document.getElementById("budget-add-category");
 const budgetAddTransactionForm = document.getElementById("budget-add-transaction");
 const toggleTooltipsButton = document.getElementById("toggle-tooltips");
 const budgetNetBalance = document.getElementById("budget-net-balance");
+const budgetCollapseBillsButton = document.getElementById(
+  "budget-collapse-bills"
+);
+const budgetExpandBillsButton = document.getElementById("budget-expand-bills");
 const budgetCollapseCategoriesButton = document.getElementById(
   "budget-collapse-categories"
 );
@@ -391,7 +395,7 @@ const positionPopover = (popover, anchor) => {
   popover.style.top = `${rect.bottom + window.scrollY + 6}px`;
 };
 
-const openPopover = (anchor, contentBuilder) => {
+const openPopover = (anchor, contentBuilder, { onClose } = {}) => {
   closeActivePopover();
   const popover = document.createElement("div");
   popover.className = "attribute-popover";
@@ -423,6 +427,9 @@ const openPopover = (anchor, contentBuilder) => {
       document.removeEventListener("pointerdown", handlePointerDown);
       document.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("resize", handleResize);
+      if (onClose) {
+        onClose();
+      }
       popover.remove();
     },
   };
@@ -2375,6 +2382,11 @@ const isSpendTransaction = (transaction) =>
 const isExcludedFromBudget = (transaction) =>
   Boolean(transaction?.excludedFromBudget);
 
+const isDebitIndicator = (transaction) =>
+  String(transaction?.creditDebitIndicator || "")
+    .trim()
+    .toLowerCase() === "debit";
+
 const getNormalizedTransactionAmount = (transaction) =>
   Math.abs(transaction?.amount || 0);
 
@@ -2569,6 +2581,12 @@ const normalizeBudgetTransactions = (state) => {
   state.transactions.forEach((transaction) => {
     if (!transaction.id) {
       transaction.id = createBudgetId("txn");
+    }
+    if (!transaction.txKey) {
+      const key = getTransactionKeyFromTransaction(transaction);
+      if (key) {
+        transaction.txKey = key;
+      }
     }
     if (!transaction.tag) {
       if (
@@ -3024,6 +3042,50 @@ const normalizeMatchText = (value) => {
     .trim();
 };
 
+const normalizeTransactionDescription = (value) => normalizeMatchText(value);
+
+const formatTransactionKeyAmount = (amount) =>
+  Number.isFinite(amount) ? Math.abs(amount).toFixed(2) : "";
+
+const buildTransactionKey = ({
+  postingDate,
+  transactionDate,
+  amount,
+  creditDebitIndicator,
+  description,
+  transactionTypeGroup,
+  transactionType,
+}) => {
+  if (!description || !Number.isFinite(amount)) {
+    return null;
+  }
+  const normalizedDescription = normalizeTransactionDescription(description);
+  const typeGroup = (transactionTypeGroup || transactionType || "")
+    .trim()
+    .toLowerCase();
+  const indicator = String(creditDebitIndicator || "").trim().toLowerCase();
+  const amountToken = formatTransactionKeyAmount(amount);
+  return [
+    postingDate || "",
+    transactionDate || "",
+    amountToken,
+    indicator,
+    normalizedDescription,
+    typeGroup,
+  ].join("|");
+};
+
+const getTransactionKeyFromTransaction = (transaction) =>
+  buildTransactionKey({
+    postingDate: transaction.postingDate || transaction.date || "",
+    transactionDate: transaction.transactionDate || "",
+    amount: transaction.amount,
+    creditDebitIndicator: transaction.creditDebitIndicator || "",
+    description: transaction.description || "",
+    transactionTypeGroup: transaction.transactionTypeGroup || "",
+    transactionType: transaction.transactionType || "",
+  });
+
 const getTodayIsoDate = () => new Date().toISOString().slice(0, 10);
 
 const getMatchRuleForDescription = (description) => {
@@ -3184,6 +3246,7 @@ const recomputeBudgetDerivedState = () => {
   const unintentionalTransactions = [];
   let totalSpent = 0;
   let netBalance = 0;
+  let excludedDebitTotal = 0;
 
   budgetState.categories.forEach((category) => {
     categorySpentTotals.set(category.id, 0);
@@ -3197,6 +3260,9 @@ const recomputeBudgetDerivedState = () => {
     const kind = getTransactionKind(transaction);
     netBalance += getNetBalanceImpact(transaction);
     if (isExcludedFromBudget(transaction)) {
+      if (isDebitIndicator(transaction)) {
+        excludedDebitTotal += getNormalizedTransactionAmount(transaction);
+      }
       return;
     }
     totalSpent += getSpendAmount(transaction);
@@ -3280,6 +3346,7 @@ const recomputeBudgetDerivedState = () => {
     remainingBalance,
     netBalance,
     totalOverBudget,
+    excludedDebitTotal,
     billTotals: {
       budget: billBudgetsTotal,
       actual: billActualsTotal,
@@ -3374,6 +3441,11 @@ const renderBudgetTotals = () => {
       label: "Loaded Transactions",
       value: derived.totalTransactions.toString(),
       tooltip: "Number of transactions currently loaded.",
+    },
+    {
+      label: "Excluded Total",
+      value: formatCurrency(derived.excludedDebitTotal),
+      tooltip: "Sum of excluded debit transactions.",
     },
     {
       label: "Bills Remaining",
@@ -3767,6 +3839,26 @@ const renderBudgetUnintentional = () => {
       <option value="">Select an action</option>
       ${excludeOption}
     `;
+  const applyUnintentionalAssignment = (transaction, selection) => {
+    if (selection === "exclude") {
+      transaction.excludedFromBudget = true;
+      transaction.reviewed = true;
+      saveBudgetState();
+      renderBudget();
+      return;
+    }
+    const [type, targetId] = selection.split(":");
+    setTransactionAssignment(transaction, { type, targetId });
+    transaction.reviewed = true;
+    transaction.autoAssigned = false;
+    upsertMatchRule(transaction.description, { type, targetId });
+    assignmentFeedback.set(transaction.id, {
+      label: "Assigned ✓",
+      expiresAt: Date.now() + 700,
+    });
+    saveBudgetState();
+    renderBudget();
+  };
   budgetUnintentional.innerHTML = `
     <div class="budget-unintentional__summary">
       <strong>${formatCurrency(derived.unintentionalTotal)}</strong>
@@ -3792,12 +3884,6 @@ const renderBudgetUnintentional = () => {
                 <span class="budget-unintentional__title">${
                   transaction.description
                 }</span>
-                <label class="budget-unintentional__assign">
-                  <span>Assign to</span>
-                  <select data-role="unintentional-assign">
-                    ${assignOptions}
-                  </select>
-                </label>
               </div>
               <span>${formatTransactionAmount(transaction)}</span>
             </div>
@@ -3810,8 +3896,7 @@ const renderBudgetUnintentional = () => {
     .querySelectorAll(".budget-unintentional__item")
     .forEach((item) => {
       const toggle = item.querySelector(".budget-unintentional__assign-toggle");
-      const select = item.querySelector('[data-role="unintentional-assign"]');
-      if (!toggle || !select) {
+      if (!toggle) {
         return;
       }
       const feedback = assignmentFeedback.get(item.dataset.transactionId);
@@ -3830,20 +3915,6 @@ const renderBudgetUnintentional = () => {
         }
       }
       toggle.addEventListener("click", () => {
-        item.classList.toggle("is-assigning");
-        toggle.setAttribute(
-          "aria-expanded",
-          item.classList.contains("is-assigning") ? "true" : "false"
-        );
-        if (item.classList.contains("is-assigning")) {
-          select.focus();
-        }
-      });
-      select.addEventListener("change", (event) => {
-        const selection = event.target.value;
-        if (!selection) {
-          return;
-        }
         const transactionId = item.dataset.transactionId;
         const transaction = budgetState.transactions.find(
           (entry) => entry.id === transactionId
@@ -3851,24 +3922,39 @@ const renderBudgetUnintentional = () => {
         if (!transaction) {
           return;
         }
-        if (selection === "exclude") {
-          transaction.excludedFromBudget = true;
-          transaction.reviewed = true;
-          saveBudgetState();
-          renderBudget();
-          return;
-        }
-        const [type, targetId] = selection.split(":");
-        setTransactionAssignment(transaction, { type, targetId });
-        transaction.reviewed = true;
-        transaction.autoAssigned = false;
-        upsertMatchRule(transaction.description, { type, targetId });
-        assignmentFeedback.set(transaction.id, {
-          label: "Assigned ✓",
-          expiresAt: Date.now() + 700,
-        });
-        saveBudgetState();
-        renderBudget();
+        toggle.setAttribute("aria-expanded", "true");
+        openPopover(
+          toggle,
+          (popover) => {
+            popover.classList.add("budget-unintentional__popover");
+            popover.innerHTML = `
+              <label class="budget-unintentional__assign-popover">
+                <span>Assign to</span>
+                <select data-role="unintentional-assign">
+                  ${assignOptions}
+                </select>
+              </label>
+            `;
+            const select = popover.querySelector(
+              '[data-role="unintentional-assign"]'
+            );
+            if (!select) {
+              return;
+            }
+            select.addEventListener("change", (event) => {
+              const selection = event.target.value;
+              if (!selection) {
+                return;
+              }
+              applyUnintentionalAssignment(transaction, selection);
+              closeActivePopover();
+            });
+            select.focus();
+          },
+          {
+            onClose: () => toggle.setAttribute("aria-expanded", "false"),
+          }
+        );
       });
   });
 };
@@ -4006,10 +4092,17 @@ const renderBudgetTransactions = () => {
     if (isCreditOrTransferTransaction(transaction)) {
       return false;
     }
-    if (budgetFilterMode === "reviewed" && !transaction.reviewed) {
-      return false;
+    if (budgetFilterMode === "reviewed") {
+      if (!transaction.reviewed || transaction.excludedFromBudget) {
+        return false;
+      }
     }
-    if (budgetFilterMode === "unreviewed" && transaction.reviewed) {
+    if (budgetFilterMode === "unreviewed") {
+      if (transaction.reviewed || transaction.excludedFromBudget) {
+        return false;
+      }
+    }
+    if (budgetFilterMode === "excluded" && !transaction.excludedFromBudget) {
       return false;
     }
     if (budgetSearchQuery) {
@@ -4094,6 +4187,9 @@ const renderBudgetTransactions = () => {
           ${transaction.reviewed ? "Reviewed" : "Unreviewed"}
         </span>
         <div class="budget-transaction__actions">
+          <button type="button" data-action="exclude">
+            ${transaction.excludedFromBudget ? "Unexclude" : "Exclude"}
+          </button>
           <button type="button" data-action="review">
             ${transaction.reviewed ? "Unreview" : "Reviewed"}
           </button>
@@ -4188,6 +4284,11 @@ const renderBudgetTransactions = () => {
         statusElement.classList.remove("is-error");
         statusElement.classList.add("is-success");
       }
+      renderBudget();
+    });
+    row.querySelector('[data-action="exclude"]').addEventListener("click", () => {
+      transaction.excludedFromBudget = !transaction.excludedFromBudget;
+      saveBudgetState();
       renderBudget();
     });
     row.querySelector('[data-action="review"]').addEventListener("click", () => {
@@ -4308,30 +4409,69 @@ const importTransactionsFromCsv = (file) => {
       headers.findIndex((header) =>
         matches.some((match) => header === match)
       );
-    const dateIndex = getIndex(["date", "posted date"]);
+    const postingDateIndex = getIndex([
+      "posting date",
+      "posted date",
+      "post date",
+    ]);
+    const transactionDateIndex = getIndex(["transaction date", "date"]);
     const descriptionIndex = getIndex(["description"]);
     const amountIndex = getIndex(["amount"]);
     const indicatorIndex = getIndex(["credit debit indicator"]);
     const typeIndex = getIndex(["type"]);
-    const existingKeys = new Set(
-      budgetState.transactions.map(
-        (transaction) =>
-          `${transaction.date}-${transaction.description}-${transaction.amount}`
-      )
-    );
+    const typeGroupIndex = getIndex(["type group", "type group name"]);
+    const categoryIndex = getIndex(["category"]);
+    const transactionIndex = new Map();
+    budgetState.transactions.forEach((transaction) => {
+      const key = transaction.txKey || getTransactionKeyFromTransaction(transaction);
+      if (key) {
+        transaction.txKey = key;
+        transactionIndex.set(key, transaction);
+      }
+    });
+    let updatedCount = 0;
     const newTransactions = rows.slice(1).reduce((acc, row) => {
       const description = row[descriptionIndex] || "Transaction";
-      const date = row[dateIndex] || "";
+      const postingDate = row[postingDateIndex] || "";
+      const transactionDate = row[transactionDateIndex] || "";
+      const date = postingDate || transactionDate || "";
       const amountRaw = parseNumber(row[amountIndex]);
       const amount = amountRaw === null ? null : Math.abs(amountRaw);
       const creditDebit = (row[indicatorIndex] || "").trim();
       const rawType = row[typeIndex] || "";
+      const rawTypeGroup = row[typeGroupIndex] || "";
+      const rawCategory = row[categoryIndex] || "";
       const transactionType = rawType.trim() || creditDebit || null;
+      const transactionTypeGroup = rawTypeGroup.trim() || null;
+      const category = rawCategory.trim() || null;
       if (amount === null) {
         return acc;
       }
-      const key = `${date}-${description}-${amount}`;
-      if (existingKeys.has(key)) {
+      const txKey = buildTransactionKey({
+        postingDate,
+        transactionDate,
+        amount,
+        creditDebitIndicator: creditDebit,
+        description,
+        transactionTypeGroup,
+        transactionType,
+      });
+      if (!txKey) {
+        return acc;
+      }
+      const existing = transactionIndex.get(txKey);
+      if (existing) {
+        existing.postingDate = postingDate;
+        existing.transactionDate = transactionDate;
+        existing.date = date;
+        existing.description = description;
+        existing.amount = amount;
+        existing.transactionType = transactionType || null;
+        existing.transactionTypeGroup = transactionTypeGroup;
+        existing.category = category;
+        existing.creditDebitIndicator = creditDebit || null;
+        existing.txKey = txKey;
+        updatedCount += 1;
         return acc;
       }
       const autoTag = getAutoTagForTransaction({
@@ -4342,9 +4482,15 @@ const importTransactionsFromCsv = (file) => {
       const transaction = {
         id: createBudgetId("txn"),
         date,
+        postingDate,
+        transactionDate,
         description,
         amount,
         transactionType: transactionType || null,
+        transactionTypeGroup,
+        category,
+        creditDebitIndicator: creditDebit || null,
+        txKey,
         reviewed: autoTag.type !== "unintentional",
         autoAssigned: autoTag.type !== "unintentional",
         tag: autoTag,
@@ -4352,15 +4498,16 @@ const importTransactionsFromCsv = (file) => {
       };
       syncTransactionAssignmentFields(transaction);
       acc.push(transaction);
-      existingKeys.add(key);
+      transactionIndex.set(txKey, transaction);
       return acc;
     }, []);
     budgetState.transactions = [...newTransactions, ...budgetState.transactions];
-    applyAutoTagsToTransactions({ onlyUnintentional: true });
     saveBudgetState();
     renderBudget();
-    if (newTransactions.length) {
-      setStatus(`Imported ${newTransactions.length} transactions.`);
+    if (newTransactions.length || updatedCount) {
+      setStatus(
+        `Imported ${newTransactions.length} new transactions, updated ${updatedCount}.`
+      );
     } else {
       setStatus("No new transactions found.");
     }
@@ -4710,12 +4857,24 @@ if (budgetAddTransactionForm) {
     if (!description || amount === null) {
       return;
     }
+    const normalizedAmount = Math.abs(amount);
+    const txKey = buildTransactionKey({
+      postingDate: date,
+      transactionDate: date,
+      amount: normalizedAmount,
+      creditDebitIndicator: transactionType,
+      description,
+      transactionTypeGroup: null,
+      transactionType,
+    });
     budgetState.transactions.unshift({
       id: createBudgetId("txn"),
       date,
       description,
-      amount: Math.abs(amount),
+      amount: normalizedAmount,
       transactionType,
+      creditDebitIndicator: transactionType,
+      txKey,
       reviewed: false,
       autoAssigned: false,
       tag: { type: "unintentional" },
@@ -4740,6 +4899,22 @@ if (budgetFilter) {
       item.classList.toggle("is-active", item === button);
     });
     renderBudgetTransactions();
+  });
+}
+
+if (budgetCollapseBillsButton) {
+  budgetCollapseBillsButton.addEventListener("click", () => {
+    budgetState.bills.forEach((bill) => {
+      collapsedBillIds.add(bill.id);
+    });
+    renderBudgetBills();
+  });
+}
+
+if (budgetExpandBillsButton) {
+  budgetExpandBillsButton.addEventListener("click", () => {
+    collapsedBillIds.clear();
+    renderBudgetBills();
   });
 }
 

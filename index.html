@@ -306,6 +306,14 @@
               <section class="budget-panel" id="budget-bills-panel">
                 <header class="budget-panel__header">
                   <h2>Fixed Bills Status</h2>
+                  <div class="budget-panel__actions">
+                    <button type="button" id="budget-collapse-bills">
+                      Collapse all
+                    </button>
+                    <button type="button" id="budget-expand-bills">
+                      Expand all
+                    </button>
+                  </div>
                 </header>
                 <div class="budget-table" id="budget-bills-table"></div>
                 <form class="budget-form budget-form--bills" id="budget-add-bill">
@@ -433,6 +441,9 @@
                           </button>
                           <button type="button" data-filter="unreviewed">
                             Unreviewed
+                          </button>
+                          <button type="button" data-filter="excluded">
+                            Excluded
                           </button>
                         </div>
                       </header>

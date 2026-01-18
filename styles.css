@@ -1697,18 +1697,18 @@ body[data-view="budget"] .mini-toolbar {
   gap: 0.3rem;
 }
 
-.budget-unintentional__assign {
-  display: none;
-  gap: 0.4rem;
-  align-items: center;
+.budget-unintentional__popover {
+  min-width: 240px;
 }
 
-.budget-unintentional__item.is-assigning .budget-unintentional__assign {
-  display: flex;
+.budget-unintentional__assign-popover {
+  display: grid;
+  gap: 0.35rem;
+  font-size: 0.75rem;
+  color: #667089;
 }
 
-.budget-unintentional__assign select {
-  flex: 1;
+.budget-unintentional__assign-popover select {
   padding: 0.35rem 0.5rem;
   border-radius: 8px;
   border: 1px solid #c8d1e3;
@@ -2165,7 +2165,7 @@ body[data-view="budget"] .mini-toolbar {
 :root[data-theme="dark"] .budget-form select,
 :root[data-theme="dark"] .budget-row button,
 :root[data-theme="dark"] .budget-unintentional__assign-toggle,
-:root[data-theme="dark"] .budget-unintentional__assign select,
+:root[data-theme="dark"] .budget-unintentional__assign-popover select,
 :root[data-theme="dark"] .budget-form button,
 :root[data-theme="dark"] .budget-transaction__assign select,
 :root[data-theme="dark"] .budget-transaction__assign button,
