@@ -1308,10 +1308,14 @@ body[data-view="budget"] .mini-toolbar {
 }
 
 .budget-layout {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 360px;
+  display: flex;
   gap: 1.25rem;
-  align-items: start;
+  align-items: flex-start;
+}
+
+.budget-layout > .budget-grid {
+  flex: 1 1 0;
+  min-width: 0;
 }
 
 .budget-grid {
@@ -1346,6 +1350,9 @@ body[data-view="budget"] .mini-toolbar {
   top: 2rem;
   height: calc(100vh - 4rem);
   align-self: start;
+  flex: 1 1 360px;
+  max-width: 420px;
+  min-width: 300px;
 }
 
 .budget-transactions-sidebar__inner {
@@ -1357,6 +1364,7 @@ body[data-view="budget"] .mini-toolbar {
   display: flex;
   flex-direction: column;
   overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .budget-transactions-sidebar__header {
@@ -1618,6 +1626,7 @@ body[data-view="budget"] .mini-toolbar {
 .budget-filter {
   display: flex;
   gap: 0.5rem;
+  flex-wrap: wrap;
 }
 
 .budget-filter button {
@@ -1891,12 +1900,15 @@ body[data-view="budget"] .mini-toolbar {
   }
 
   .budget-layout {
-    grid-template-columns: minmax(0, 1fr);
+    flex-direction: column;
   }
 
   .budget-transactions-sidebar {
     position: static;
     height: auto;
+    max-width: none;
+    min-width: 0;
+    width: 100%;
   }
 
   .budget-grid {
