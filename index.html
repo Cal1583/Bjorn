@@ -275,11 +275,54 @@
                   Dark mode
                 </button>
               </div>
+              <div class="view-options__group">
+                <span class="mini-toolbar__label">Display resolution</span>
+                <div class="view-options__resolution">
+                  <select id="display-resolution-select">
+                    <option value="" selected>Select a resolution</option>
+                    <option value="1280x720">1280 × 720 (HD)</option>
+                    <option value="1366x768">1366 × 768 (WXGA)</option>
+                    <option value="1440x900">1440 × 900 (WXGA+)</option>
+                    <option value="1600x900">1600 × 900 (HD+)</option>
+                    <option value="1920x1080">1920 × 1080 (FHD)</option>
+                    <option value="2560x1440">2560 × 1440 (QHD)</option>
+                    <option value="3840x2160">3840 × 2160 (4K UHD)</option>
+                  </select>
+                  <div class="view-options__resolution-actions">
+                    <button
+                      id="display-resolution-preview"
+                      type="button"
+                      disabled
+                    >
+                      Preview
+                    </button>
+                    <button id="display-resolution-apply" type="button" disabled>
+                      Apply set
+                    </button>
+                    <button id="display-resolution-reset" type="button">
+                      Reset
+                    </button>
+                  </div>
+                  <p
+                    class="view-options__resolution-status"
+                    id="display-resolution-status"
+                  >
+                    Applied: Default
+                  </p>
+                </div>
+              </div>
             </div>
           </div>
         </div>
         <div class="canvas__content" id="canvas-content">
           <svg class="canvas__lines" id="relationship-lines"></svg>
+        </div>
+        <div
+          class="canvas__resolution-preview"
+          id="display-resolution-preview-box"
+          hidden
+        >
+          <span class="canvas__resolution-label"></span>
         </div>
         <section class="budget-view" id="budget-view" hidden>
           <div class="budget-layout">
