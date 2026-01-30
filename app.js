@@ -45,6 +45,24 @@ const gridToggleButton = document.getElementById("grid-toggle");
 const snapToggleButton = document.getElementById("snap-toggle");
 const viewDefinitionsButton = document.getElementById("view-definitions");
 const themeToggleButtons = document.querySelectorAll("[data-theme-toggle]");
+const displayResolutionSelect = document.getElementById(
+  "display-resolution-select"
+);
+const displayResolutionPreviewButton = document.getElementById(
+  "display-resolution-preview"
+);
+const displayResolutionApplyButton = document.getElementById(
+  "display-resolution-apply"
+);
+const displayResolutionResetButton = document.getElementById(
+  "display-resolution-reset"
+);
+const displayResolutionStatus = document.getElementById(
+  "display-resolution-status"
+);
+const displayResolutionPreviewBox = document.getElementById(
+  "display-resolution-preview-box"
+);
 const templateList = document.getElementById("template-list");
 const templateEmpty = document.getElementById("template-empty");
 const openBudgetButton = document.getElementById("open-budget");
@@ -137,6 +155,9 @@ let tooltipsEnabled = true;
 let collapsedCategoryIds = new Set();
 let collapsedBillIds = new Set();
 let budgetDerivedState = null;
+let selectedResolution = null;
+let appliedResolution = null;
+let previewResolution = null;
 
 const assignmentFeedback = new Map();
 
@@ -148,7 +169,7 @@ const zoomSettings = {
 
 const gridSize = 20;
 const classNodeWidthEstimate = 260;
-const canvasDefaultSize = { width: 2400, height: 1800 };
+const canvasBaseSize = { width: 2400, height: 1800 };
 const canvasPadding = 200;
 const canvasOriginOffset = 360;
 
@@ -353,6 +374,8 @@ const updateSearchHighlights = () => {
   });
 };
 
+const getCanvasBaseSize = () => appliedResolution || canvasBaseSize;
+
 const setViewOptionsOpen = (open) => {
   isViewOptionsOpen = open;
   if (viewOptionsPanel) {
@@ -377,6 +400,64 @@ const setSnapEnabled = (enabled) => {
   if (snapToggleButton) {
     snapToggleButton.classList.toggle("is-active", isSnapEnabled);
     snapToggleButton.setAttribute("aria-pressed", String(isSnapEnabled));
+  }
+};
+
+const formatResolutionLabel = (resolution) =>
+  `${resolution.width} × ${resolution.height}`;
+
+const parseResolutionValue = (value) => {
+  if (!value) {
+    return null;
+  }
+  const [width, height] = value.split("x").map((entry) => Number(entry.trim()));
+  if (!width || !height) {
+    return null;
+  }
+  return { width, height };
+};
+
+const setResolutionStatusText = () => {
+  if (!displayResolutionStatus) {
+    return;
+  }
+  const statusText = appliedResolution
+    ? `Applied: ${formatResolutionLabel(appliedResolution)}`
+    : "Applied: Default";
+  displayResolutionStatus.textContent = statusText;
+};
+
+const setResolutionPreview = (resolution, { prefix = "Preview" } = {}) => {
+  if (!displayResolutionPreviewBox || !canvas) {
+    return;
+  }
+  if (!resolution) {
+    canvas.style.removeProperty("--resolution-preview-width");
+    canvas.style.removeProperty("--resolution-preview-height");
+    displayResolutionPreviewBox.hidden = true;
+    return;
+  }
+  const label = displayResolutionPreviewBox.querySelector(
+    ".canvas__resolution-label"
+  );
+  if (label) {
+    label.textContent = `${prefix}: ${formatResolutionLabel(resolution)}`;
+  }
+  canvas.style.setProperty("--resolution-preview-width", `${resolution.width}px`);
+  canvas.style.setProperty(
+    "--resolution-preview-height",
+    `${resolution.height}px`
+  );
+  displayResolutionPreviewBox.hidden = false;
+};
+
+const updateResolutionControls = () => {
+  const hasSelection = Boolean(selectedResolution);
+  if (displayResolutionPreviewButton) {
+    displayResolutionPreviewButton.disabled = !hasSelection;
+  }
+  if (displayResolutionApplyButton) {
+    displayResolutionApplyButton.disabled = !hasSelection;
   }
 };
 
@@ -1219,12 +1300,13 @@ const renderLines = () => {
 
 const updateCanvasBounds = () => {
   const nodes = Array.from(canvasContent.querySelectorAll(".class-node"));
+  const baseSize = getCanvasBaseSize();
   if (!nodes.length) {
     canvasContent.style.width = `${
-      canvasDefaultSize.width + canvasOriginOffset * 2
+      baseSize.width + canvasOriginOffset * 2
     }px`;
     canvasContent.style.height = `${
-      canvasDefaultSize.height + canvasOriginOffset * 2
+      baseSize.height + canvasOriginOffset * 2
     }px`;
     return;
   }
@@ -1247,12 +1329,12 @@ const updateCanvasBounds = () => {
     }
   );
   const nextWidth = Math.max(
-    canvasDefaultSize.width + canvasOriginOffset * 2,
+    baseSize.width + canvasOriginOffset * 2,
     bounds.maxRight + canvasPadding,
     bounds.maxRight + canvasOriginOffset
   );
   const nextHeight = Math.max(
-    canvasDefaultSize.height + canvasOriginOffset * 2,
+    baseSize.height + canvasOriginOffset * 2,
     bounds.maxBottom + canvasPadding,
     bounds.maxBottom + canvasOriginOffset
   );
@@ -4658,6 +4740,58 @@ if (themeToggleButtons.length) {
     button.addEventListener("click", () => setThemeMode(!isDarkMode));
   });
 }
+
+if (displayResolutionSelect) {
+  displayResolutionSelect.addEventListener("change", (event) => {
+    selectedResolution = parseResolutionValue(event.target.value);
+    updateResolutionControls();
+    if (!selectedResolution) {
+      previewResolution = null;
+      setResolutionPreview(null);
+    }
+  });
+}
+
+if (displayResolutionPreviewButton) {
+  displayResolutionPreviewButton.addEventListener("click", () => {
+    if (!selectedResolution) {
+      return;
+    }
+    previewResolution = selectedResolution;
+    setResolutionPreview(previewResolution, { prefix: "Preview" });
+  });
+}
+
+if (displayResolutionApplyButton) {
+  displayResolutionApplyButton.addEventListener("click", () => {
+    if (!selectedResolution) {
+      return;
+    }
+    appliedResolution = { ...selectedResolution };
+    previewResolution = null;
+    setResolutionPreview(null);
+    setResolutionStatusText();
+    updateCanvasBounds();
+  });
+}
+
+if (displayResolutionResetButton) {
+  displayResolutionResetButton.addEventListener("click", () => {
+    appliedResolution = null;
+    previewResolution = null;
+    selectedResolution = null;
+    if (displayResolutionSelect) {
+      displayResolutionSelect.value = "";
+    }
+    setResolutionPreview(null);
+    setResolutionStatusText();
+    updateResolutionControls();
+    updateCanvasBounds();
+  });
+}
+
+setResolutionStatusText();
+updateResolutionControls();
 
 if (toggleTooltipsButton) {
   toggleTooltipsButton.addEventListener("click", () =>
